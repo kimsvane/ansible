@@ -7,9 +7,9 @@
         url: 'https://download2.veeam.com/VBO/v6/VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
         dest: 'C:\temp\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
     - name: Install PSCX
-  ansible.windows.win_powershell:
-    script: |
-      Install-Package pscx -Force
+      ansible.windows.win_powershell:
+        script: |
+          Install-Package pscx -Force
     
     - name: Extract ISO
       win_unzip:
