@@ -15,7 +15,8 @@
 
     - name: Run installer from mounted ISO
       ansible.windows.win_package:
-        path: '{{ disk_image_out.mount_paths[0] }}Backup\Veeam.Backup365.msi /qn ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1'
+        path: '{{ disk_image_out.mount_paths[0] }}Backup\Veeam.Backup365.msi'
+        arguments: '/qn ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1'
         state: present
 
     - name: Unmount ISO
