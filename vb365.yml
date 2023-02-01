@@ -5,15 +5,15 @@
     - name: Download the VB365 installer
       ansible.windows.win_get_url:
         url: 'https://download2.veeam.com/VBO/v6/VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
-        dest: 'C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
+        dest: 'C:\temp\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
     - name: Extract ISO
       win_unzip:
-        src: C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso
-        dest: C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215\
+        src: C:\temp\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso
+        dest: C:\temp\VeeamBackupMicrosoft365_6.1.0.438_P20221215\
 
 
 
     - name: Install MSI
       win_package:
-        path: 'C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215\Backup\Veeam.Backup365.msi'
+        path: 'C:\temp\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
         state: present
