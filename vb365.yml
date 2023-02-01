@@ -9,7 +9,7 @@
     - name: Install PSCX
       ansible.windows.win_powershell:
         script: |
-          Install-Package pscx -Force
+          Install-Package pscx -Force -AllowClobber
     
     - name: Extract ISO
       win_unzip:
