@@ -3,7 +3,7 @@
 
   tasks:
     - name: Download the VB365 installer
-      win_get_url:
+      ansible.windows.win_get_url:
         url: 'https://download2.veeam.com/VBO/v6/VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
         dest: 'C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
     - name: Extract ISO
