@@ -30,9 +30,16 @@
         name: MaxUserPort
         data: 65000
         type: dword
+ 
     - name: TCPPort
       ansible.windows.win_regedit:
         path: HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters
         name: TcpTimedWaitDelay
         data: 30
         type: dword
+        
+        
+    - name: Install all updates and reboot as many times as needed
+      ansible.windows.win_updates:
+        category_names: '*'
+        reboot: yes
