@@ -8,7 +8,7 @@
         dest: 'C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
     - name: Extract ISO
       win_unzip:
-        image: C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso
+        src: C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso
         dest: C:\Users\Administrator\Downloads\VeeamBackupMicrosoft365_6.1.0.438_P20221215\
 
 
