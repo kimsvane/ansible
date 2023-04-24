@@ -2,6 +2,13 @@
   hosts: all 
 
   tasks:
+  
+  
+    - name: Create C:\temp folder
+      win_file:
+      path: C:\temp
+      state: directory
+
     - name: Download the VB365 installer
       ansible.windows.win_get_url:
         url: 'https://download2.veeam.com/VBO/v6/VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
