@@ -16,12 +16,12 @@
         data: 30
         type: dword
         
-     - name: Set multiple lookup addresses on all visible adapters (usually physical adapters that are in the Up state), with debug logging to a file
-       win_dns_client:
-        adapter_names: '*'
-        ipv4_addresses:
-        - 10.1.0.4
-        log_path: C:\dns_log.txt
+    - name: Set multiple lookup addresses on all visible adapters (usually physical adapters that are in the Up state), with debug logging to a file
+      win_dns_client:
+       adapter_names: '*'
+       ipv4_addresses:
+       - 10.1.0.4
+       log_path: C:\dns_log.txt
 
         
     
