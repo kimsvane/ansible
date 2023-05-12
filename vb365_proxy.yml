@@ -35,3 +35,7 @@
         protocol: tcp
         state: present
         enabled: yes
+        
+    - name: Set timezone to 'GMT Standard Time' (GMT)
+      win_timezone:
+        timezone: GMT Standard Time 
