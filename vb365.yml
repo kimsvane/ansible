@@ -42,7 +42,6 @@
       win_dns_client:
         adapter_names: '*'
         ipv4_addresses:
-        - 10.1.0.5
         - 10.1.0.4
         log_path: C:\dns_log.txt       
         
