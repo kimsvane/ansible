@@ -46,6 +46,6 @@
       win_timezone:
         timezone: GMT Standard Time
         
-    - name: Reboot when domain join requires it
-      meta: reboot
-      when: domain_state.reboot_required
+    - name: Restart to complete domain join
+      ansible.windows.win_restart:
+
