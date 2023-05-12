@@ -44,9 +44,11 @@
         ipv4_addresses:
         - 10.1.0.5
         - 10.1.0.4
-        log_path: C:\dns_log.txt        
-
+        log_path: C:\dns_log.txt       
         
+    - name: Set timezone to 'GMT Standard Time' (GMT)
+      win_timezone:
+        timezone: GMT Standard Time 
     
     - name: Allow TCP port 3389
       community.windows.win_firewall_rule:
