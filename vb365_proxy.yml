@@ -1,6 +1,5 @@
-- name: VB365 Download
-  hosts: all 
-
+- name: Proxy deployment
+  hosts: all
   tasks:
     - name: UserPort
       ansible.windows.win_regedit:
@@ -16,14 +15,12 @@
         data: 30
         type: dword
         
-    - name: Set multiple lookup addresses on all visible adapters (usually physical adapters that are in the Up state), with debug logging to a file
+    - name: Set multiple lookup addresses on all visible adapters
       win_dns_client:
-       adapter_names: '*'
-       ipv4_addresses:
-       - 10.1.0.4
-       log_path: C:\dns_log.txt
-
-        
+        adapter_names: '*'
+        ipv4_addresses:
+          - 10.1.0.4
+        log_path: C:\dns_log.txt
     
     - name: Allow TCP port 3389
       community.windows.win_firewall_rule:
@@ -39,13 +36,15 @@
       win_timezone:
         timezone: GMT Standard Time 
     
-    - name: "Join Domain"
+    - name: Join Domain
       win_domain_membership:
         dns_domain_name: vpc.apac.local
         domain_admin_user: administrator
         domain_admin_password: JGnh3tnmFCETFVz74VkC
-          state: domain
-        register: domain_state
+        state: domain
+      register: domain_state
+      
     - debug: var=domain_state
+    
     - win_reboot:
-          when: domain_state.reboot_required
+        when: domain_state.reboot_required
