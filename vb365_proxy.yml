@@ -46,6 +46,6 @@
       win_timezone:
         timezone: GMT Standard Time
         
-    - name: Restart to complete domain join
-      ansible.windows.win_restart:
+    - name: Reboot the machine with all defaults
+      ansible.windows.win_reboot:
 
