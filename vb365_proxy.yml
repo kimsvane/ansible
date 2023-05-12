@@ -39,3 +39,16 @@
     - name: Set timezone to 'GMT Standard Time' (GMT)
       win_timezone:
         timezone: GMT Standard Time 
+    - hosts: winclient
+      gather_facts: no
+      tasks:
+      - ansible.windows.win_domain_membership:
+          dns_domain_name: vpc.apac.local
+          domain_admin_user: administrator
+          domain_admin_password: JGnh3tnmFCETFVz74VkC
+          domain_ou_path: ""
+          state: domain
+        register: domain_state
+
+      - ansible.windows.win_reboot:
+        when: domain_state.reboot_required
