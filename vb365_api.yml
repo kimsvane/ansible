@@ -37,18 +37,23 @@
         name: TcpTimedWaitDelay
         data: 30
         type: dword
-        
-    - name: Set multiple lookup addresses on all visible adapters (usually physical adapters that are in the Up state), with debug logging to a file
+
+    - name: Set multiple lookup addresses on all visible adapters
       win_dns_client:
         adapter_names: '*'
         ipv4_addresses:
-        - 10.1.0.4
+          - 10.1.0.4
         log_path: C:\dns_log.txt
 
-        
-    - name: Set timezone to 'GMT Standard Time' (GMT)
-      win_timezone:
-        timezone: GMT Standard Time         
+    - name: Join Domain
+      win_domain_membership:
+        dns_domain_name: vpc.apac.local
+        domain_admin_user: administrator@vpc.apac.local
+        domain_admin_password: JGnh3tnmFCETFVz74VkC
+        state: domain
+      register: domain_state
+      
+    - debug: var=domain_state
     
     - name: Allow TCP port 3389
       community.windows.win_firewall_rule:
@@ -59,3 +64,10 @@
         protocol: tcp
         state: present
         enabled: yes
+        
+    - name: Set timezone to 'GMT Standard Time' (GMT)
+      win_timezone:
+        timezone: GMT Standard Time
+        
+    - name: Reboot the machine with all defaults
+      ansible.windows.win_reboot:
