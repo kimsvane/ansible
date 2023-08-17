@@ -20,6 +20,7 @@
         adapter_names: '*'
         ipv4_addresses:
           - 10.251.132.4
+          - 1.1.1.1
         log_path: C:\dns_log.txt
 
     - name: Join Domain
