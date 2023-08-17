@@ -42,14 +42,14 @@
       win_dns_client:
         adapter_names: '*'
         ipv4_addresses:
-          - 10.1.0.4
+          - 10.251.132.4
         log_path: C:\dns_log.txt
 
     - name: Join Domain
       win_domain_membership:
         dns_domain_name: vpc.apac.local
-        domain_admin_user: administrator@vpc.apac.local
-        domain_admin_password: JGnh3tnmFCETFVz74VkC
+        domain_admin_user: jdsa@vbo365shared.revirt.global
+        domain_admin_password: 9BDPWDmbe_ANGCEv.Y8Zhc
         state: domain
       register: domain_state
       
