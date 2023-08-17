@@ -25,7 +25,7 @@
 
     - name: Join Domain
       win_domain_membership:
-        dns_domain_name: vpc.apac.local
+        dns_domain_name: vbo365shared.revirt.global
         domain_admin_user: jdsa@vbo365shared.revirt.global
         domain_admin_password: 9BDPWDmbe_ANGCEv.Y8Zhc
         state: domain
