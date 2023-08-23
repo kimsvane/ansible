@@ -1,6 +1,9 @@
 - name: VB365 Download
   hosts: all 
-
+        
+- name: Set timezone to 'UTC' 
+    win_timezone:
+        timezone: UTC
   tasks:
     - name: Download the VB365 installer
       ansible.windows.win_get_url:
@@ -75,10 +78,7 @@
         protocol: tcp
         state: present
         enabled: yes
-        
-    - name: Set timezone to 'GMT Standard Time' (GMT)
-      win_timezone:
-        timezone: GMT Standard Time
+
         
     - name: Reboot the machine with all defaults
       ansible.windows.win_reboot:
