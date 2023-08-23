@@ -65,6 +65,16 @@
         protocol: tcp
         state: present
         enabled: yes
+
+    - name: Allow TCP port 4443
+      community.windows.win_firewall_rule:
+        name: Remote Desktop
+        localport: 4443
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
         
     - name: Set timezone to 'GMT Standard Time' (GMT)
       win_timezone:
