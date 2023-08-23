@@ -1,7 +1,7 @@
 - name: VB365 Download
   hosts: all 
 - name: Set timezone to 'UTC' 
-  win_timezone:
+    win_timezone:
         timezone: UTC
   tasks:
     - name: Download the VB365 installer
