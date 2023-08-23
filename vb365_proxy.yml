@@ -54,9 +54,9 @@
         enabled: yes
 
         
-    - name: Set timezone to 'GMT Standard Time' (GMT)
+    - name: Set timezone to 'UTC' 
       win_timezone:
-        timezone: GMT Standard Time
+        timezone: UTC
         
     - name: Reboot the machine with all defaults
       ansible.windows.win_reboot:
