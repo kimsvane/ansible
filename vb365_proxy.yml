@@ -43,6 +43,17 @@
         state: present
         enabled: yes
         
+    - name: Allow TCP port 9193
+      community.windows.win_firewall_rule:
+        name: Remote Desktop
+        localport: 9193
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
+
+        
     - name: Set timezone to 'GMT Standard Time' (GMT)
       win_timezone:
         timezone: GMT Standard Time
