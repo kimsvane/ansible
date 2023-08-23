@@ -15,6 +15,10 @@
         data: 30
         type: dword
         
+    - name: Set timezone to 'UTC' 
+      win_timezone:
+        timezone: UTC
+        
     - name: Set multiple lookup addresses on all visible adapters
       win_dns_client:
         adapter_names: '*'
@@ -53,10 +57,7 @@
         state: present
         enabled: yes
 
-        
-    - name: Set timezone to 'UTC' 
-      win_timezone:
-        timezone: UTC
+
         
     - name: Reboot the machine with all defaults
       ansible.windows.win_reboot:
