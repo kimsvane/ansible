@@ -23,14 +23,14 @@
       win_dns_client:
         adapter_names: '*'
         ipv4_addresses:
-          - 10.251.132.4
-          - 10.251.132.5
+          - 10.251.132.7
+          - 10.251.132.6
         log_path: C:\dns_log.txt
 
     - name: Join Domain
       win_domain_membership:
-        dns_domain_name: VB365EUDE.2any.cloud
-        domain_admin_user: ADSA@VB365EUDE.2any.cloud
+        dns_domain_name: VB365.2any.cloud
+        domain_admin_user: ADSA@VB365.2any.cloud
         domain_admin_password: d!s6*NPtLebfpMgU9KzQoMQ.bEUt4Zrkx
         state: domain
       register: domain_state
