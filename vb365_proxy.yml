@@ -15,10 +15,35 @@
         data: 30
         type: dword
         
-    - name: Set timezone to 'UTC'
-      win_timezone:
-        name: UTC
+    - name: Set Windows Timezone to UTC
+      ansible.builtin.win_shell: |
+          $timezone = "UTC"
+          Set-TimeZone -Id $timezone
+          become: yes
+          become_method: runas
 
+    - name: Set Windows Locale to Danish (Denmark) with UTF8 Keyboard
+      ansible.builtin.win_shell: |
+        $locale = "da-DK"
+        $keyboard = "00000406"
+        Set-WinUILanguageOverride -Language $locale
+        Set-WinUserLanguageList -Language $locale -Force
+        Set-WinUILanguage -Language $locale
+        Set-WinUILanguageDefaults -Language $locale
+        Set-WinUserLanguageList -Language $locale -Force
+        Set-WinUILanguage -Language $locale
+        Set-WinUILanguageDefaults -Language $locale
+        Set-WinUserLanguageList -Language $locale -Force
+        New-WinUserLanguageList en-US -Force
+        Set-WinUILanguage -Language $locale
+        Set-WinUserLanguageList -Language $locale -Force
+        Set-WinUILanguageDefaults -Language $locale
+        $keyboardSettings = New-WinUserLanguageList $locale -Force
+        $keyboardSettings[0].InputMethodTips.Add('0406:00000406')
+        Set-WinUserLanguageList $keyboardSettings -Force
+        Set-WinUILanguageDefaults $locale -Force
+      become: yes
+      become_method: runas
         
     - name: Set multiple lookup addresses on all visible adapters
       win_dns_client:
