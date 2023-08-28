@@ -15,12 +15,9 @@
         data: 30
         type: dword
         
-    - name: Set Windows Timezone to UTC
-      ansible.builtin.win_shell: |
-          $timezone = "UTC"
-          Set-TimeZone -Id $timezone
-          become: yes
-          become_method: runas
+    - name: "Set the TimeZone"
+      win_timezone:
+         timezone: "(UTC) Coordinated Universal Time" 
 
     - name: Set Windows Locale to Danish (Denmark) with UTF8 Keyboard
       ansible.builtin.win_shell: |
