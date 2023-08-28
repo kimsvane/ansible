@@ -15,9 +15,9 @@
         data: 30
         type: dword
         
-- name: Set timezone to 'UTC'
-  win_timezone:
-    name: UTC
+    - name: Set timezone to 'UTC'
+      win_timezone:
+        name: UTC
 
         
     - name: Set multiple lookup addresses on all visible adapters
