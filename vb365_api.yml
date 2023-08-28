@@ -1,9 +1,10 @@
 - name: VB365 Download
   hosts: all 
         
-- name: Set timezone to 'UTC' 
-    win_timezone:
-        timezone: UTC
+- name: Set timezone to 'UTC'
+  win_timezone:
+    name: UTC
+
   tasks:
     - name: Download the VB365 installer
       ansible.windows.win_get_url:
