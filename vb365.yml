@@ -44,8 +44,8 @@
       win_dns_client:
         adapter_names: '*'
         ipv4_addresses:
-        - 10.251.132.4
-        - 10.251.132.5
+        - 10.251.132.7
+        - 10.251.132.6
         log_path: C:\dns_log.txt       
         
     - name: Set timezone to 'GMT Standard Time' (GMT)
