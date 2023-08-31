@@ -19,26 +19,13 @@
       win_timezone:
         timezone: GMT Standard Time
 
-    - name: Set Windows Locale to Danish (Denmark) with UTF8 Keyboard
+    - name: Set Windows Keyboard Layout to Danish (Denmark)
       ansible.builtin.win_shell: |
         $locale = "da-DK"
         $keyboard = "00000406"
-        Set-WinUILanguageOverride -Language $locale
-        Set-WinUserLanguageList -Language $locale -Force
-        Set-WinUILanguage -Language $locale
-        Set-WinUILanguageDefaults -Language $locale
-        Set-WinUserLanguageList -Language $locale -Force
-        Set-WinUILanguage -Language $locale
-        Set-WinUILanguageDefaults -Language $locale
-        Set-WinUserLanguageList -Language $locale -Force
-        New-WinUserLanguageList en-US -Force
-        Set-WinUILanguage -Language $locale
-        Set-WinUserLanguageList -Language $locale -Force
-        Set-WinUILanguageDefaults -Language $locale
-        $keyboardSettings = New-WinUserLanguageList $locale -Force
-        $keyboardSettings[0].InputMethodTips.Add('0406:00000406')
-        Set-WinUserLanguageList $keyboardSettings -Force
-        Set-WinUILanguageDefaults $locale -Force
+        $userHKL = Get-WinUserLanguageList
+        $userHKL[0].InputMethodTips.Add("$keyboard:$keyboard")
+        Set-WinUserLanguageList $userHKL
       become: yes
       become_method: runas
         
