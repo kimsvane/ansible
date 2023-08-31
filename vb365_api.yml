@@ -9,7 +9,7 @@
 
     - name: Download the VB365 installer
       ansible.windows.win_get_url:
-        url: 'https://download2.veeam.com/VBO/v6/VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
+        url: 'https://download2.veeam.com/VBO/v7/VeeamBackupMicrosoft365_7.0.0.3604_P20230512.iso'
         dest: 'C:\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
 
     - name: Ensure an ISO is mounted
