@@ -11,21 +11,26 @@
         url: 'https://download2.veeam.com/VBO/v6/VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
         dest: 'C:\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso'
 
-    - name: Ensure an ISO is mounted
+    - name: Define ISO and Installer Paths
+      vars:
+        iso_path: C:\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso
+        installer_path: "{{ disk_image_out.mount_paths[0] }}Backup\Veeam.Backup365.msi"
+
+    - name: Ensure ISO is mounted
       community.windows.win_disk_image:
-        image_path: C:\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso
+        image_path: "{{ iso_path }}"
         state: present
       register: disk_image_out
 
     - name: Run installer from mounted ISO
       ansible.windows.win_package:
-        path: '{{ disk_image_out.mount_paths[0] }}Backup\Veeam.Backup365.msi'
+        path: "{{ installer_path }}"
         arguments: '/qn ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1'
         state: present
 
     - name: Unmount ISO
       community.windows.win_disk_image:
-        image_path: C:\VeeamBackupMicrosoft365_6.1.0.438_P20221215.iso
+        image_path: "{{ iso_path }}"
         state: absent
 
     - name: UserPort
