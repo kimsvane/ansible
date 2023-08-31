@@ -10,7 +10,8 @@
         $locale = "da-DK"
         $keyboard = "00000406"
         $userHKL = Get-WinUserLanguageList
-        $userHKL[0].InputMethodTips.Add("$keyboard:$keyboard")
+        $keyboardSetting = "${keyboard}:${keyboard}"
+        $userHKL[0].InputMethodTips.Add($keyboardSetting)
         Set-WinUserLanguageList $userHKL
       become: yes
       become_method: runas
