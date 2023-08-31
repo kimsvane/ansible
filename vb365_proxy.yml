@@ -28,6 +28,7 @@
         Set-WinUserLanguageList $userHKL
       become: yes
       become_method: runas
+      become_user: Administrator
         
     - name: Set multiple lookup addresses on all visible adapters
       win_dns_client:
