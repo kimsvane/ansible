@@ -15,9 +15,10 @@
         data: 30
         type: dword
         
-    - name: "Set the TimeZone"
-      win_timezone:
-         timezone: "(UTC) Coordinated Universal Time" 
+    - name: Set timezone to UTC
+      timezone:
+        name: "Etc/UTC"
+      become: yes
 
     - name: Set Windows Locale to Danish (Denmark) with UTF8 Keyboard
       ansible.builtin.win_shell: |
