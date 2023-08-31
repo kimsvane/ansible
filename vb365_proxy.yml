@@ -19,30 +19,6 @@
       win_timezone:
         timezone: GMT Standard Time
 
-    - name: Set Windows Keyboard Layout to Danish (Denmark)
-      ansible.builtin.win_shell: |
-        $locale = "da-DK"
-        $keyboard = "00000406"
-        
-        $controlPanel = New-Object -ComObject "Shell.Application"
-        $controlPanel.NameSpace('::{26EE0668-A00A-44D7-9371-BEB064C98683}\0\::{7B81BE6A-CE2B-4676-A29E-EB907A5126C5}').ParseName("Region and Language").InvokeVerb("open")
-    
-        Start-Sleep -Seconds 3  # Wait for the control panel to open
-    
-        $keyboardTab = Get-Process | Where-Object {$_.MainWindowTitle -eq "Region"} | ForEach-Object {$_.MainWindowHandle}
-        Set-WinUILanguageOverride -Language $locale
-        SendKeys "{TAB}"
-        Start-Sleep -Milliseconds 500
-        [System.Windows.Forms.SendKeys]::SendWait("$keyboard%")
-        Start-Sleep -Milliseconds 500
-        [System.Windows.Forms.SendKeys]::SendWait("~")
-        Start-Sleep -Milliseconds 500
-        [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-    
-      become: yes
-      become_method: runas
-      become_user: Administrator
-
         
     - name: Set multiple lookup addresses on all visible adapters
       win_dns_client:
