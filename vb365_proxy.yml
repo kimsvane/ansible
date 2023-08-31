@@ -15,10 +15,9 @@
         data: 30
         type: dword
         
-    - name: Set timezone to UTC
-      timezone:
-        name: "Etc/UTC"
-      become: yes
+    - name: Set timezone to 'GMT Standard Time' (GMT)
+      win_timezone:
+        timezone: GMT Standard Time
 
     - name: Set Windows Locale to Danish (Denmark) with UTF8 Keyboard
       ansible.builtin.win_shell: |
