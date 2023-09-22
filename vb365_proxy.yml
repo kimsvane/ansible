@@ -50,7 +50,7 @@
         
     - name: Allow TCP port 9193
       community.windows.win_firewall_rule:
-        name: Remote Desktop
+        name: Controller communication 9193
         localport: 9193
         action: allow
         direction: in
@@ -58,7 +58,15 @@
         state: present
         enabled: yes
 
-
+    - name: Controller communication 445
+      community.windows.win_firewall_rule:
+        name: Controller communication 445
+        localport: 445
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
         
     - name: Reboot the machine with all defaults
       ansible.windows.win_reboot:
