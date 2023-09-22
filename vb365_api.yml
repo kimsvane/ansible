@@ -81,6 +81,26 @@
         state: present
         enabled: yes
 
-        
+   
+    - name: Controller Communication 9194
+      community.windows.win_firewall_rule:
+        name: Controller Communication 9194
+        localport: 9194
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
+
+    - name: Controller Communication 445
+      community.windows.win_firewall_rule:
+        name: Controller Communication 445
+        localport: 445
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
+     
     - name: Reboot the machine with all defaults
       ansible.windows.win_reboot:
