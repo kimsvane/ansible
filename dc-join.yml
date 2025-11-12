@@ -1,0 +1,48 @@
+---
+- name: Join secondary DC to existing domain
+  hosts: dc2
+  vars:
+    domain_name: "{{ domain_name }}"
+    dc_password: "{{ dc_password }}"
+    recovery_password: "{{ recovery_password }}"
+    upstream_dns_1: "{{ upstream_dns_1 }}"
+    upstream_dns_2: "{{ upstream_dns_2 }}"
+    ntp_servers: "{{ ntp_servers }}"
+  gather_facts: no
+
+  tasks:
+    - name: Configure DNS before domain join
+      win_dns_client:
+        adapter_names: '*'
+        ipv4_addresses:
+          - "{{ upstream_dns_1 }}"
+          - "{{ upstream_dns_2 }}"
+
+    - name: Join existing domain
+      win_domain_membership:
+        dns_domain_name: "{{ domain_name }}"
+        hostname: "{{ inventory_hostname }}"
+        domain_admin_user: "Administrator@{{ domain_name }}"
+        domain_admin_password: "{{ dc_password }}"
+        state: domain
+      register: join_result
+
+    - name: Reboot after join
+      win_reboot:
+        msg: "Rebooting after domain join"
+        pre_reboot_delay: 30
+      when: join_result.reboot_required
+
+    - name: Install AD DS on secondary DC
+      win_feature:
+        name: AD-Domain-Services
+        include_management_tools: yes
+        state: present
+
+    - name: Promote server to domain controller
+      win_domain_controller:
+        domain_name: "{{ domain_name }}"
+        safe_mode_password: "{{ recovery_password }}"
+        state: domain_controller
+        install_dns: yes
+        reboot_on_success: yes
