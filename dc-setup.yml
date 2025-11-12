@@ -13,6 +13,13 @@
   gather_facts: no
 
   tasks:
+    - name: Wait for WinRM to become available
+      wait_for:
+        host: "{{ dc_address }}"
+        port: 5986
+        timeout: 600       # vent op til 10 minutter
+        state: started
+
     - name: Set administrator password
       win_user:
         name: Administrator
