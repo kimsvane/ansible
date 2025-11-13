@@ -20,11 +20,11 @@
         timeout: 600       # vent op til 10 minutter
         state: started
 
-    - name: Set administrator password
-      win_user:
-        name: Administrator
-        password: "{{ dc_password }}"
-        state: present
+#    - name: Set administrator password
+#      win_user:
+#        name: Administrator
+#        password: "{{ dc_password }}"
+#        state: present
 
     - name: Set upstream DNS
       win_dns_client:
