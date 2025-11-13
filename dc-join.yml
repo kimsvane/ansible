@@ -16,11 +16,11 @@
 
   tasks:
     - name: Wait for WinRM to become available
-    wait_for:
-      host: "{{ dc_address }}"
-      port: 5986
-      timeout: 600       # vent op til 10 minutter
-      state: started
+      ansible.windows.win_wait_for:
+        port: 5985
+        delay: 5
+        timeout: 300
+        host: "{{ ansible_host }}"
 
     - name: Configure DNS before domain join
       win_dns_client:
