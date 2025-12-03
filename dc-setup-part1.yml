@@ -1,0 +1,40 @@
+- name: Domain Controller Setup - PART 1 (Feature Install and Reboot)
+  hosts: dc
+  vars:
+    dc_password: "{{ dc_password }}"
+    # Use ansible_host which is set by the inventory for win_wait_for
+    ansible_host: "{{ ansible_host }}"
+
+  gather_facts: no
+
+  tasks:
+    - name: Ensure initial WinRM is reachable
+      # Wait for the initial WinRM connection to be ready after OS boot
+      ansible.windows.win_wait_for:
+        port: 5985
+        delay: 5
+        timeout: 300
+        host: "{{ ansible_host }}"
+
+    - name: Set Administrator password
+      ansible.windows.win_user:
+        name: Administrator
+        password: "{{ dc_password }}"
+        state: present
+
+    - name: Ensure required Windows features (AD DS) are installed
+      ansible.windows.win_feature:
+        name: AD-Domain-Services
+        include_management_tools: yes
+        state: present
+      async: 900 # Max 15 minutes for the task to run
+      poll: 30
+      register: feature_result
+      
+    - name: Reboot if required by feature installation
+      # This task MUST be here to initiate the reboot.
+      # The reboot will terminate the WinRM session, but Ansible will exit cleanly
+      # and Terraform will handle the wait for the target host to return.
+      ansible.windows.win_reboot:
+      when: feature_result.reboot_required is defined and feature_result.reboot_required
+      # NOTE: Changed from 'feature_install' to 'feature_result' to match your register
