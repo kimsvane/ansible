@@ -1,5 +1,5 @@
 ---
-- name: Configure Domain Controller
+- name: Configure Domain Controller (robust)
   hosts: dc
   vars:
     dc_address: "{{ dc_address }}"
@@ -9,48 +9,114 @@
     recovery_password: "{{ recovery_password }}"
     upstream_dns_1: "{{ upstream_dns_1 }}"
     upstream_dns_2: "{{ upstream_dns_2 }}"
-    ntp_servers: "{{ ntp_servers }}"
+    ntp_servers: "{{ ntp_servers | default([]) }}"
+    # WinRM/connection vars her for klarhed — overrides fra inventory er OK
     ansible_connection: winrm
     ansible_port: 5985
     ansible_winrm_transport: ntlm
     ansible_winrm_server_cert_validation: ignore
+    ansible_winrm_read_timeout_sec: 120
+    ansible_winrm_operation_timeout_sec: 120
   gather_facts: no
 
   tasks:
-    - name: Wait for WinRM to become available
+    - name: Ensure initial WinRM is reachable
       ansible.windows.win_wait_for:
         port: 5985
         delay: 5
         timeout: 300
         host: "{{ ansible_host }}"
 
-    - name: Set administrator password
-      win_user:
+    - name: Set Administrator password (idempotent)
+      ansible.windows.win_user:
         name: Administrator
         password: "{{ dc_password }}"
         state: present
 
-    - name: Set upstream DNS
-      win_dns_client:
+    - name: Ensure required Windows features (AD DS) are installed
+      ansible.windows.win_feature:
+        name: AD-Domain-Services
+        include_management_tools: yes
+        state: present
+      register: feature_result
+
+    - name: Pause a moment after installing features (give Windows a breather)
+      ansible.builtin.pause:
+        seconds: 8
+      when: feature_result.changed
+
+    - name: Create / Promote Domain (if needed)
+      ansible.windows.win_domain:
+        dns_domain_name: "{{ domain_name }}"
+        safe_mode_password: "{{ recovery_password }}"
+        # optional: domain_netbios_name: "MYDOMAIN"
+      register: ad_domain
+      failed_when: ad_domain is failed and ("already exists" not in (ad_domain.msg | default('')))
+
+    - name: If domain promotion indicated, reboot the host
+      ansible.windows.win_reboot:
+        msg: "Rebooting after domain promotion"
+        pre_reboot_delay: 15
+        reboot_timeout: 900
+        post_reboot_delay: 10
+      when: ad_domain.changed
+
+    - name: Wait for WinRM to be reachable after any reboot or promotion
+      ansible.windows.win_wait_for:
+        port: 5985
+        delay: 5
+        timeout: 600
+        host: "{{ ansible_host }}"
+
+    - name: Ensure AD services are responding (simple check)
+      ansible.windows.win_shell: |
+        nltest /dsgetdc:{{ domain_name }}
+      register: nltest_out
+      failed_when: nltest_out.rc != 0
+      changed_when: false
+
+    - name: Set upstream DNS (AFTER domain promotion and reboot)
+      ansible.windows.win_dns_client:
         adapter_names: '*'
         ipv4_addresses:
           - "{{ upstream_dns_1 }}"
           - "{{ upstream_dns_2 }}"
+      register: dns_change
+      failed_when: dns_change is failed
 
-    - name: Install Active Directory Domain Services
-      win_feature:
-        name: AD-Domain-Services
-        include_management_tools: yes
-        state: present
+    - name: Wait a short while for network stack to stabilise after DNS change
+      ansible.builtin.pause:
+        seconds: 10
+      when: dns_change.changed
 
-    - name: Create Domain
-      win_domain:
-        dns_domain_name: "{{ domain_name }}"
-        safe_mode_password: "{{ recovery_password }}"
-      register: ad_domain
+    - name: Wait for WinRM to come back after DNS change (again)
+      ansible.windows.win_wait_for:
+        port: 5985
+        delay: 3
+        timeout: 120
+        host: "{{ ansible_host }}"
 
-    - name: Reboot after AD install
-      win_reboot:
-        msg: "Rebooting after domain promotion"
-        pre_reboot_delay: 15
-      when: ad_domain.changed
+    - name: Verify DNS settings (nslookup against configured upstream)
+      ansible.windows.win_shell: |
+        nslookup localhost {{ upstream_dns_1 }}
+      register: nslookup_out
+      failed_when: nslookup_out.rc != 0
+      changed_when: false
+
+    - name: Optional - configure NTP servers (if provided)
+      when: ntp_servers | length > 0
+      ansible.windows.win_shell: |
+        foreach ($s in @({{ ntp_servers | map('quote') | join(',') }})) {
+          w32tm /config /manualpeerlist:$s /syncfromflags:manual /update
+        }
+        w32tm /resync
+      register: ntp_out
+      changed_when: "'The command completed successfully' in (ntp_out.stdout + ntp_out.stderr)"
+
+    - name: Final short wait to ensure all services steady
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Done - report state
+      ansible.builtin.debug:
+        msg: "Domain controller tasks completed. AD changed={{ ad_domain.changed }} DNS changed={{ dns_change.changed | default(false) }}"
