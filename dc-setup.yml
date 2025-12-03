@@ -33,6 +33,8 @@
         name: AD-Domain-Services
         include_management_tools: yes
         state: present
+      async: 900 # Max 15 minutes for the task to run
+      poll: 30
       register: feature_result
 
     - name: Pause after feature install
