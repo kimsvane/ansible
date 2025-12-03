@@ -36,6 +36,10 @@
       async: 900 # Max 15 minutes for the task to run
       poll: 30
       register: feature_result
+      
+    - name: Reboot if required by feature installation
+      ansible.windows.win_reboot:
+      when: feature_install.reboot_required
 
     - name: Pause after feature install
       ansible.builtin.pause:
