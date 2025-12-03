@@ -10,13 +10,16 @@
     upstream_dns_1: "{{ upstream_dns_1 }}"
     upstream_dns_2: "{{ upstream_dns_2 }}"
     ntp_servers: "{{ ntp_servers | default([]) }}"
-    # WinRM/connection vars her for klarhed — overrides fra inventory er OK
+
     ansible_connection: winrm
     ansible_port: 5985
     ansible_winrm_transport: ntlm
     ansible_winrm_server_cert_validation: ignore
-    #ansible_winrm_read_timeout_sec: 120
-    #ansible_winrm_operation_timeout_sec: 120
+
+    # Disse to løser "read_timeout_sec must exceed operation_timeout_sec"
+    ansible_winrm_operation_timeout_sec: 120
+    ansible_winrm_read_timeout_sec: 300
+
   gather_facts: no
 
   tasks:
@@ -40,33 +43,47 @@
         state: present
       register: feature_result
 
-    - name: Pause a moment after installing features (give Windows a breather)
-      ansible.builtin.pause:
-        seconds: 8
-      when: feature_result.changed
-
-    - name: Create / Promote Domain (if needed)
-      ansible.windows.win_domain:
-        dns_domain_name: "{{ domain_name }}"
-        safe_mode_password: "{{ recovery_password }}"
-        # optional: domain_netbios_name: "MYDOMAIN"
-      register: ad_domain
-      failed_when: ad_domain is failed and ("already exists" not in (ad_domain.msg | default('')))
-
-    - name: If domain promotion indicated, reboot the host
+    - name: Reboot if feature install requires it
       ansible.windows.win_reboot:
-        msg: "Rebooting after domain promotion"
-        pre_reboot_delay: 15
+        msg: "Reboot after AD DS role installation"
+        pre_reboot_delay: 10
         reboot_timeout: 900
-        post_reboot_delay: 10
-      when: ad_domain.changed
+      when: feature_result.reboot_required
 
-    - name: Wait for WinRM to be reachable after any reboot or promotion
+    - name: Wait for WinRM to return after AD DS reboot
       ansible.windows.win_wait_for:
         port: 5985
         delay: 5
         timeout: 600
         host: "{{ ansible_host }}"
+      when: feature_result.reboot_required
+
+    - name: Pause a moment after features (Windows stabiliserer sig)
+      ansible.builtin.pause:
+        seconds: 8
+
+    - name: Create / Promote Domain (if needed)
+      ansible.windows.win_domain:
+        dns_domain_name: "{{ domain_name }}"
+        safe_mode_password: "{{ recovery_password }}"
+      register: ad_domain
+      failed_when: ad_domain is failed and ("already exists" not in (ad_domain.msg | default('')))
+
+    - name: Reboot after domain promotion (always needed)
+      ansible.windows.win_reboot:
+        msg: "Rebooting after domain promotion"
+        pre_reboot_delay: 15
+        reboot_timeout: 1200
+        post_reboot_delay: 15
+      when: ad_domain.changed
+
+    - name: Wait for WinRM after domain promotion
+      ansible.windows.win_wait_for:
+        port: 5985
+        delay: 5
+        timeout: 900
+        host: "{{ ansible_host }}"
+      when: ad_domain.changed
 
     - name: Ensure AD services are responding (simple check)
       ansible.windows.win_shell: |
@@ -93,7 +110,7 @@
       ansible.windows.win_wait_for:
         port: 5985
         delay: 3
-        timeout: 120
+        timeout: 180
         host: "{{ ansible_host }}"
 
     - name: Verify DNS settings (nslookup against configured upstream)
