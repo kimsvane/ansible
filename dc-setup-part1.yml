@@ -1,22 +1,22 @@
 - name: Domain Controller Setup - PART 1 (Feature Install and Reboot)
   hosts: dc
   vars:
-    dc_password: "{{ dc_password }}"
-    # Use ansible_host which is set by the inventory for win_wait_for
-    #ansible_host: "{{ ansible_host }}"
+    dc_password: "{{ dc_password }}" 
 
-  gather_facts: no
+  gather_facts: no # Godt at undgå, da det sparer tid
 
   tasks:
     - name: Ensure initial WinRM is reachable
-      # Wait for the initial WinRM connection to be ready after OS boot
+      # Denne venter på, at WinRM er oppe, hvilket er nødvendigt, især efter en frisk boot/provisionering.
       ansible.windows.win_wait_for:
         port: 5985
         delay: 5
         timeout: 300
+        # Brugen af 'ansible_host' er korrekt, da den hentes fra inventory.
         host: "{{ ansible_host }}"
 
     - name: Set Administrator password
+      # Sætter det lokale Administrator-password. Dette er et godt skridt.
       ansible.windows.win_user:
         name: Administrator
         password: "{{ dc_password }}"
@@ -27,14 +27,15 @@
         name: AD-Domain-Services
         include_management_tools: yes
         state: present
-      async: 900 # Max 15 minutes for the task to run
-      poll: 30
+      async: 900 # Lader opgaven køre i baggrunden i op til 15 minutter
+      poll: 30   # Tjekker status hvert 30. sekund
       register: feature_result
+      # BEMÆRK: Hvis dette trin kræver genstart, vil Ansible ikke fortsætte automatisk. 
+      # Du skal køre en SEPARAT playbook/step bagefter for at fortsætte efter genstarten.
       
     - name: Reboot if required by feature installation
-      # This task MUST be here to initiate the reboot.
-      # The reboot will terminate the WinRM session, but Ansible will exit cleanly
-      # and Terraform will handle the wait for the target host to return.
+      # Denne opgave håndterer den nødvendige genstart. 
+      # 'win_reboot' vil afslutte Ansible-forbindelsen.
       ansible.windows.win_reboot:
       when: feature_result.reboot_required is defined and feature_result.reboot_required
-      # NOTE: Changed from 'feature_install' to 'feature_result' to match your register
+      # BEMÆRK: Din registrering 'feature_result' matcher nu 'when'-betingelsen.
