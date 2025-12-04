@@ -3,7 +3,7 @@
   vars:
     dc_password: "{{ dc_password }}"
     # Use ansible_host which is set by the inventory for win_wait_for
-    ansible_host: "{{ ansible_host }}"
+    #ansible_host: "{{ ansible_host }}"
 
   gather_facts: no
 
