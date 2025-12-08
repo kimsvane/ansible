@@ -1,41 +1,65 @@
+---
 - name: Domain Controller Setup - PART 1 (Feature Install and Reboot)
   hosts: dc
   vars:
-    dc_password: "{{ dc_password }}" 
-
-  gather_facts: no # Godt at undgå, da det sparer tid
-
+    dc_password: "{{ dc_password }}"
+  gather_facts: no
   tasks:
     - name: Ensure initial WinRM is reachable
-      # Denne venter på, at WinRM er oppe, hvilket er nødvendigt, især efter en frisk boot/provisionering.
       ansible.windows.win_wait_for:
         port: 5985
         delay: 5
         timeout: 300
-        # Brugen af 'ansible_host' er korrekt, da den hentes fra inventory.
         host: "{{ ansible_host }}"
-
+      
     - name: Set Administrator password
-      # Sætter det lokale Administrator-password. Dette er et godt skridt.
       ansible.windows.win_user:
         name: Administrator
         password: "{{ dc_password }}"
         state: present
-
+      register: admin_pw_result
+      retries: 3
+      delay: 10
+      until: admin_pw_result is succeeded
+    
     - name: Ensure required Windows features (AD DS) are installed
       ansible.windows.win_feature:
         name: AD-Domain-Services
         include_management_tools: yes
         state: present
-      async: 900 # Lader opgaven køre i baggrunden i op til 15 minutter
-      poll: 30   # Tjekker status hvert 30. sekund
       register: feature_result
-      # BEMÆRK: Hvis dette trin kræver genstart, vil Ansible ikke fortsætte automatisk. 
-      # Du skal køre en SEPARAT playbook/step bagefter for at fortsætte efter genstarten.
+      # Remove async/poll - let it run synchronously with retries instead
+      retries: 2
+      delay: 30
+      until: feature_result is succeeded
+      
+    - name: Display feature installation result
+      ansible.builtin.debug:
+        msg: "Feature installation completed. Reboot required: {{ feature_result.reboot_required | default(false) }}"
       
     - name: Reboot if required by feature installation
-      # Denne opgave håndterer den nødvendige genstart. 
-      # 'win_reboot' vil afslutte Ansible-forbindelsen.
       ansible.windows.win_reboot:
-      when: feature_result.reboot_required is defined and feature_result.reboot_required
-      # BEMÆRK: Din registrering 'feature_result' matcher nu 'when'-betingelsen.
+        reboot_timeout: 600
+        post_reboot_delay: 60
+        test_command: 'whoami'
+      when: feature_result.reboot_required | default(false)
+      register: reboot_result
+      
+    - name: Wait for system to fully stabilize after reboot
+      ansible.windows.win_wait_for:
+        port: 5985
+        delay: 10
+        timeout: 300
+        host: "{{ ansible_host }}"
+      when: feature_result.reboot_required | default(false)
+      
+    - name: Verify AD DS feature is installed
+      ansible.windows.win_feature:
+        name: AD-Domain-Services
+        state: present
+      register: verify_feature
+      failed_when: verify_feature.changed
+      
+    - name: Completion message
+      ansible.builtin.debug:
+        msg: "Part 1 completed successfully. AD-DS features are installed. Ready for domain promotion."
