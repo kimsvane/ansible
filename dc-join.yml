@@ -1,6 +1,6 @@
 ---
 - name: Join secondary DC to existing domain
-  hosts: dc2
+  hosts: dc
   vars:
     domain_name: "{{ domain_name }}"
     dc_password: "{{ dc_password }}"
