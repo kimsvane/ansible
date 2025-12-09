@@ -9,7 +9,7 @@
     upstream_dns_2: "{{ upstream_dns_2 }}"
     ntp_servers: "{{ ntp_servers }}"
     ansible_connection: winrm
-    ansible_port: 5985
+    ansible_port: 5986
     ansible_winrm_transport: ntlm
     ansible_winrm_server_cert_validation: ignore
   gather_facts: no
@@ -17,7 +17,7 @@
   tasks:
     - name: Wait for WinRM to become available
       ansible.windows.win_wait_for:
-        port: 5985
+        port: 5986
         delay: 5
         timeout: 300
         host: "{{ ansible_host }}"
