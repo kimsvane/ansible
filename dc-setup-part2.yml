@@ -16,7 +16,7 @@
     # but a full win_wait_for is good here as well.
     - name: Ensure WinRM is reachable after first reboot
       ansible.windows.win_wait_for:
-        port: 5985
+        port: 5986
         delay: 5
         timeout: 300
         host: "{{ ansible_host }}"
@@ -38,7 +38,7 @@
 
     - name: Wait for WinRM after promotion reboot
       ansible.windows.win_wait_for:
-        port: 5985
+        port: 5986
         delay: 5
         timeout: 600
         host: "{{ ansible_host }}"
@@ -64,7 +64,7 @@
 
     - name: Wait for WinRM after DNS change
       ansible.windows.win_wait_for:
-        port: 5985
+        port: 5986
         delay: 3
         timeout: 120
         host: "{{ ansible_host }}"
