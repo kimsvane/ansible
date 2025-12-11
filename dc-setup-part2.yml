@@ -21,13 +21,15 @@
         timeout: 300
         host: "{{ ansible_host }}"
 
-    - name: Promote domain (if needed)
-      ansible.windows.win_domain:
-        dns_domain_name: "{{ domain_name }}"
+    - name: Promote server to new forest
+      ansible.windows.win_domain_controller:
+        dns_domain_name: "{{ domain_name }}"  # br02.int.2any.cloud
         safe_mode_password: "{{ recovery_password }}"
+        # NetBIOS navn er valgfrit, men godt at have, f.eks. BR02
+        domain_netbios_name: "{{ domain_name | split('.') | first | upper }}" 
+        state: forest  # VIGTIGT: Opretter den første DC/Skov
       register: ad_domain
-      failed_when: ad_domain is failed and ("already exists" not in (ad_domain.msg | default('')))
-
+      # Det er normalt bedre at lade det fejle her, da en promotion altid skal ske.
     - name: Reboot after promotion
       ansible.windows.win_reboot:
         msg: "Rebooting after domain promotion"
@@ -43,11 +45,6 @@
         timeout: 600
         host: "{{ ansible_host }}"
 
-    - name: Verify AD DS responsive
-      ansible.windows.win_shell: "nltest /dsgetdc:{{ domain_name }}"
-      register: nltest_out
-      failed_when: nltest_out.rc != 0
-      changed_when: false
 
     - name: Set upstream DNS
       ansible.windows.win_dns_client:
@@ -73,6 +70,12 @@
       ansible.windows.win_shell: "nslookup localhost {{ upstream_dns_1 }}"
       register: nslookup_out
       failed_when: nslookup_out.rc != 0
+      changed_when: false
+
+    - name: Verify AD DS responsive
+      ansible.windows.win_shell: "nltest /dsgetdc:{{ domain_name }}"
+      register: nltest_out
+      failed_when: nltest_out.rc != 0
       changed_when: false
 
     - name: Final short wait
