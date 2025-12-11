@@ -7,7 +7,7 @@
   tasks:
     - name: Ensure initial WinRM is reachable
       ansible.windows.win_wait_for:
-        port: 5986
+        port: 5985
         delay: 5
         timeout: 300
         host: "{{ ansible_host }}"
