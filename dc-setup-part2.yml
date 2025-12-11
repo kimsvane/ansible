@@ -44,6 +44,11 @@
         delay: 5
         timeout: 600
         host: "{{ ansible_host }}"
+        # --- TILFØJ DENNE VARS-BLOK ---
+      vars:
+        # Tvinger Ansible til at logge på med UPN-formatet: AdminUser@br02.int.2any.cloud
+        ansible_user: "AdminUser@{{ domain_name }}"
+        # password'et skal stadig komme fra den globale 'ansible_password' variabel i inventaret.
 
 
     - name: Set upstream DNS
