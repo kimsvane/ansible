@@ -33,9 +33,9 @@
         create_dns_delegation: false
         database_path: C:\Windows\NTDS
         dns_domain_name: "{{ domain_name }}"
-        domain_mode: Win2012R2
+        domain_mode: Win2025
         domain_netbios_name: ANSIBLE
-        forest_mode: Win2012R2
+        forest_mode: Win2025
         safe_mode_password: "{{ recovery_password }}"
         sysvol_path: C:\Windows\SYSVOL
       register: domain_install
