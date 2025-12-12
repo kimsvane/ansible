@@ -8,6 +8,7 @@
     recovery_password: "{{ recovery_password }}"
     upstream_dns_1: "{{ upstream_dns_1 }}"
     upstream_dns_2: "{{ upstream_dns_2 }}"
+    netbios: "{{ netbios }}"
   gather_facts: no
 
   tasks:
@@ -18,14 +19,26 @@
       register: result
       until: result is succeeded
 
-    - name: Promote server to new forest
-      ansible.windows.win_domain_controller:
+    # - name: Promote server to new forest
+    #   ansible.windows.win_domain_controller:
+    #     dns_domain_name: "{{ domain_name }}"
+    #     safe_mode_password: "{{ recovery_password }}"
+    #     state: forest
+    #     domain_admin_user: "administrator"
+    #     domain_admin_password: "{{ dc_password }}"
+    #   register: ad_domain
+
+    - name: Create new Windows domain in a new forest with specific parameters and reboot in post task
+      microsoft.ad.domain:
+        create_dns_delegation: false
+        database_path: C:\Windows\NTDS
         dns_domain_name: "{{ domain_name }}"
+        domain_mode: Win2012R2
+        domain_netbios_name: ANSIBLE
+        forest_mode: Win2012R2
         safe_mode_password: "{{ recovery_password }}"
-        state: forest
-        domain_admin_user: "administrator"
-        domain_admin_password: "{{ dc_password }}"
-      register: ad_domain
+        sysvol_path: C:\Windows\SYSVOL
+      register: domain_install
 
     - name: Reboot after promotion
       ansible.windows.win_reboot:
