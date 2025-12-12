@@ -8,49 +8,50 @@
     recovery_password: "{{ recovery_password }}"
     upstream_dns_1: "{{ upstream_dns_1 }}"
     upstream_dns_2: "{{ upstream_dns_2 }}"
-
   gather_facts: no
 
   tasks:
-    # We rely on the Terraform `nc` check for the first part of the wait,
-    # but a full win_wait_for is good here as well.
-    - name: Ensure WinRM is reachable after first reboot
-      ansible.windows.win_wait_for:
-        port: 5985
-        delay: 5
-        timeout: 300
-        host: "{{ ansible_host }}"
+    - name: Wait for WinRM to be fully ready (with retries)
+      ansible.windows.win_ping:
+      retries: 20
+      delay: 15
+      register: result
+      until: result is succeeded
 
     - name: Promote server to new forest
       ansible.windows.win_domain_controller:
-        dns_domain_name: "{{ domain_name }}"  # br02.int.2any.cloud
+        dns_domain_name: "{{ domain_name }}"
         safe_mode_password: "{{ recovery_password }}"
-        state: forest  # VIGTIGT: Opretter den første DC/Skov
+        state: forest
       register: ad_domain
-      # Det er normalt bedre at lade det fejle her, da en promotion altid skal ske.
+
     - name: Reboot after promotion
       ansible.windows.win_reboot:
         msg: "Rebooting after domain promotion"
         pre_reboot_delay: 15
         reboot_timeout: 900
-        post_reboot_delay: 10
+        post_reboot_delay: 30
       when: ad_domain.changed
 
-    - name: Wait for WinRM after promotion reboot
-      ansible.windows.win_wait_for:
-        port: 5985
-        delay: 5
-        timeout: 600
-        host: "{{ ansible_host }}"
+    - name: Wait for domain services to be ready
+      ansible.windows.win_ping:
+      retries: 30
+      delay: 20
+      register: result
+      until: result is succeeded
       vars:
-        # Tvinger Ansible til at logge på med UPN-formatet: AdminUser@br02.int.2any.cloud
-        ansible_user: "administrator@{{ domain_name }}"
-        # password'et skal stadig komme fra den globale 'ansible_password' variabel i inventaret.
+        # After promotion, use domain admin format
+        ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
+        ansible_password: "{{ dc_password }}"
+
     - name: Verify AD DS responsive
       ansible.windows.win_shell: "nltest /dsgetdc:{{ domain_name }}"
       register: nltest_out
       failed_when: nltest_out.rc != 0
       changed_when: false
+      vars:
+        ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
+        ansible_password: "{{ dc_password }}"
 
     - name: Set upstream DNS
       ansible.windows.win_dns_client:
@@ -59,30 +60,18 @@
           - "{{ upstream_dns_1 }}"
           - "{{ upstream_dns_2 }}"
       register: dns_change
-
-    - name: Wait after DNS update
-      ansible.builtin.pause:
-        seconds: 10
-      when: dns_change.changed
-
-    - name: Wait for WinRM after DNS change
-      ansible.windows.win_wait_for:
-        port: 5985
-        delay: 3
-        timeout: 120
-        host: "{{ ansible_host }}"
+      vars:
+        ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
+        ansible_password: "{{ dc_password }}"
 
     - name: Verify DNS settings
       ansible.windows.win_shell: "nslookup localhost {{ upstream_dns_1 }}"
       register: nslookup_out
       failed_when: nslookup_out.rc != 0
       changed_when: false
-
-
-
-    - name: Final short wait
-      ansible.builtin.pause:
-        seconds: 5
+      vars:
+        ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
+        ansible_password: "{{ dc_password }}"
 
     - name: Done
       ansible.builtin.debug:
