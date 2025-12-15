@@ -8,7 +8,7 @@
     - name: Ensure initial WinRM is reachable
       ansible.windows.win_wait_for:
         port: 5985
-        delay: 5
+        delay: 60
         timeout: 300
         host: "{{ ansible_host }}"
       
@@ -30,7 +30,7 @@
       register: feature_result
       # Remove async/poll - let it run synchronously with retries instead
       retries: 2
-      delay: 30
+      delay: 50
       until: feature_result is succeeded
       
     - name: Display feature installation result
@@ -48,7 +48,7 @@
     - name: Wait for system to fully stabilize after reboot
       ansible.windows.win_wait_for:
         port: 5986
-        delay: 10
+        delay: 15
         timeout: 300
         host: "{{ ansible_host }}"
       when: feature_result.reboot_required | default(false)

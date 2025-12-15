@@ -38,6 +38,7 @@
         forest_mode: Win2025
         safe_mode_password: "{{ recovery_password }}"
         sysvol_path: C:\Windows\SYSVOL
+        reboot: true
       register: domain_install
 
     - name: Reboot after promotion
