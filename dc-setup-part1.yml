@@ -22,43 +22,88 @@
       delay: 10
       until: admin_pw_result is succeeded
     
-    - name: Ensure required Windows features (AD DS) are installed
-      ansible.windows.win_feature:
-        name: AD-Domain-Services
-        include_management_tools: yes
-        state: present
-      register: feature_result
-      # Remove async/poll - let it run synchronously with retries instead
-      retries: 2
-      delay: 50
-      until: feature_result is succeeded
+    # ---- LØSNING 6 STARTER HER ----
+    - name: Create logging directory
+      ansible.windows.win_file:
+        path: C:\Logs
+        state: directory
+
+    - name: Check available disk space before installation
+      ansible.windows.win_shell: |
+        Get-PSDrive C | Select-Object @{N='FreeGB';E={[math]::Round($_.Free/1GB,2)}}, @{N='UsedGB';E={[math]::Round($_.Used/1GB,2)}}
+      register: disk_space
+
+    - name: Display disk space
+      debug:
+        var: disk_space.stdout_lines
+
+    - name: Install AD-DS features with verbose logging
+      ansible.windows.win_shell: |
+        Start-Transcript -Path "C:\Logs\feature-install.log" -Append
+        Install-WindowsFeature -Name AD-Domain-Services,RSAT-ADDS -IncludeManagementTools -Verbose
+        Stop-Transcript
+      async: 3600
+      poll: 30
+      register: install_result
+
+    - name: Fetch installation log
+      ansible.windows.win_shell: Get-Content C:\Logs\feature-install.log -Tail 100
+      register: install_log
+      when: install_result is defined
+
+    - name: Display installation log
+      debug:
+        var: install_log.stdout_lines
+      when: install_log is defined
+
+    - name: Parse feature installation result
+      ansible.windows.win_shell: |
+        Get-WindowsFeature -Name AD-Domain-Services | Select-Object Name, Installed, InstallState | ConvertTo-Json
+      register: feature_status
+
+    - name: Display feature status
+      debug:
+        var: feature_status.stdout | from_json
+    # ---- LØSNING 6 SLUTTER HER ----
       
-    - name: Display feature installation result
-      ansible.builtin.debug:
-        msg: "Feature installation completed. Reboot required: {{ feature_result.reboot_required | default(false) }}"
+    - name: Check if reboot is required
+      ansible.windows.win_shell: |
+        if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") { 
+          "true" 
+        } else { 
+          "false" 
+        }
+      register: reboot_check
+
+    - name: Display reboot status
+      debug:
+        msg: "Reboot required: {{ reboot_check.stdout | trim }}"
       
     - name: Reboot if required by feature installation
       ansible.windows.win_reboot:
         reboot_timeout: 600
         post_reboot_delay: 60
         test_command: 'whoami'
-      when: feature_result.reboot_required | default(false)
+      when: reboot_check.stdout | trim == "true"
       register: reboot_result
       
     - name: Wait for system to fully stabilize after reboot
       ansible.windows.win_wait_for:
-        port: 5986
+        port: 5985
         delay: 15
         timeout: 300
         host: "{{ ansible_host }}"
-      when: feature_result.reboot_required | default(false)
+      when: reboot_check.stdout | trim == "true"
       
     - name: Verify AD DS feature is installed
-      ansible.windows.win_feature:
-        name: AD-Domain-Services
-        state: present
+      ansible.windows.win_shell: |
+        $feature = Get-WindowsFeature -Name AD-Domain-Services
+        if ($feature.Installed -eq $true) {
+          "AD-DS is installed"
+        } else {
+          throw "AD-DS installation failed"
+        }
       register: verify_feature
-      failed_when: verify_feature.changed
       
     - name: Completion message
       ansible.builtin.debug:
