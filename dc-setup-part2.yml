@@ -1,14 +1,14 @@
 - name: Domain Controller Setup - PART 2 (Promotion and Configuration)
   hosts: dc
-  vars:
-    dc_address: "{{ dc_address }}"
-    dc_hostname: "{{ dc_hostname }}"
-    domain_name: "{{ domain_name }}"
-    dc_password: "{{ dc_password }}"
-    recovery_password: "{{ recovery_password }}"
-    upstream_dns_1: "{{ upstream_dns_1 }}"
-    upstream_dns_2: "{{ upstream_dns_2 }}"
-    netbios: "{{ netbios }}"
+  # vars:
+  #   dc_address: "{{ dc_address }}"
+  #   dc_hostname: "{{ dc_hostname }}"
+  #   domain_name: "{{ domain_name }}"
+  #   dc_password: "{{ dc_password }}"
+  #   recovery_password: "{{ recovery_password }}"
+  #   upstream_dns_1: "{{ upstream_dns_1 }}"
+  #   upstream_dns_2: "{{ upstream_dns_2 }}"
+  #   netbios: "{{ netbios }}"
   gather_facts: no
 
   tasks:
@@ -34,60 +34,60 @@
         database_path: C:\Windows\NTDS
         dns_domain_name: "{{ domain_name }}"
         domain_mode: Win2025
-        domain_netbios_name: ANSIBLE
+        domain_netbios_name: "{{ netbios }}"
         forest_mode: Win2025
         safe_mode_password: "{{ recovery_password }}"
         sysvol_path: C:\Windows\SYSVOL
         reboot: true
       register: domain_install
 
-    - name: Reboot after promotion
-      ansible.windows.win_reboot:
-        msg: "Rebooting after domain promotion"
-        pre_reboot_delay: 15
-        reboot_timeout: 900
-        post_reboot_delay: 30
-      when: ad_domain.changed
+    # - name: Reboot after promotion
+    #   ansible.windows.win_reboot:
+    #     msg: "Rebooting after domain promotion"
+    #     pre_reboot_delay: 15
+    #     reboot_timeout: 900
+    #     post_reboot_delay: 30
+    #   when: ad_domain.changed
 
-    - name: Wait for domain services to be ready
-      ansible.windows.win_ping:
-      retries: 30
-      delay: 20
-      register: result
-      until: result is succeeded
-      vars:
-        # After promotion, use domain admin format
-        ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
-        ansible_password: "{{ dc_password }}"
+    # - name: Wait for domain services to be ready
+    #   ansible.windows.win_ping:
+    #   retries: 30
+    #   delay: 20
+    #   register: result
+    #   until: result is succeeded
+    #   vars:
+    #     # After promotion, use domain admin format
+    #     ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
+    #     ansible_password: "{{ dc_password }}"
 
-    - name: Verify AD DS responsive
-      ansible.windows.win_shell: "nltest /dsgetdc:{{ domain_name }}"
-      register: nltest_out
-      failed_when: nltest_out.rc != 0
-      changed_when: false
-      vars:
-        ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
-        ansible_password: "{{ dc_password }}"
+    # - name: Verify AD DS responsive
+    #   ansible.windows.win_shell: "nltest /dsgetdc:{{ domain_name }}"
+    #   register: nltest_out
+    #   failed_when: nltest_out.rc != 0
+    #   changed_when: false
+    #   vars:
+    #     ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
+    #     ansible_password: "{{ dc_password }}"
 
-    - name: Set upstream DNS
-      ansible.windows.win_dns_client:
-        adapter_names: '*'
-        ipv4_addresses:
-          - "{{ upstream_dns_1 }}"
-          - "{{ upstream_dns_2 }}"
-      register: dns_change
-      vars:
-        ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
-        ansible_password: "{{ dc_password }}"
+    # - name: Set upstream DNS
+    #   ansible.windows.win_dns_client:
+    #     adapter_names: '*'
+    #     ipv4_addresses:
+    #       - "{{ upstream_dns_1 }}"
+    #       - "{{ upstream_dns_2 }}"
+    #   register: dns_change
+    #   vars:
+    #     ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
+    #     ansible_password: "{{ dc_password }}"
 
-    - name: Verify DNS settings
-      ansible.windows.win_shell: "nslookup localhost {{ upstream_dns_1 }}"
-      register: nslookup_out
-      failed_when: nslookup_out.rc != 0
-      changed_when: false
-      vars:
-        ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
-        ansible_password: "{{ dc_password }}"
+    # - name: Verify DNS settings
+    #   ansible.windows.win_shell: "nslookup localhost {{ upstream_dns_1 }}"
+    #   register: nslookup_out
+    #   failed_when: nslookup_out.rc != 0
+    #   changed_when: false
+    #   vars:
+    #     ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
+    #     ansible_password: "{{ dc_password }}"
 
     - name: Done
       ansible.builtin.debug:
