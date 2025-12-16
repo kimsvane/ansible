@@ -108,3 +108,5 @@
     - name: Completion message
       ansible.builtin.debug:
         msg: "Part 1 completed successfully. AD-DS features are installed. Ready for domain promotion."
+
+        #Latest working \CurrentVersion

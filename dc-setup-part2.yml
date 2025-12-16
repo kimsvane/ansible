@@ -92,3 +92,4 @@
     - name: Done
       ansible.builtin.debug:
         msg: "Domain controller tasks completed. AD changed={{ ad_domain.changed }} DNS changed={{ dns_change.changed | default(false) }}"
+#Latest working \CurrentVersion
