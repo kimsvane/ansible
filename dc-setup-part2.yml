@@ -89,7 +89,7 @@
     #     ansible_user: "{{ domain_name.split('.')[0] | upper }}\\Administrator"
     #     ansible_password: "{{ dc_password }}"
 
-    - name: Done
-      ansible.builtin.debug:
-        msg: "Domain controller tasks completed. AD changed={{ ad_domain.changed }} DNS changed={{ dns_change.changed | default(false) }}"
+    # - name: Done
+    #   ansible.builtin.debug:
+    #     msg: "Domain controller tasks completed. AD changed={{ ad_domain.changed }} DNS changed={{ dns_change.changed | default(false) }}"
 #Latest working \CurrentVersion

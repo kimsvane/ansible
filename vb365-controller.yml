@@ -1,0 +1,177 @@
+  ---
+- name: VB365 v8.2 Download and Installation
+  hosts: all
+  vars:
+    vb365_version: "8.2.0.2202"
+    vb365_iso_url: "https://download2.veeam.com/VBO/v8/VeeamBackupMicrosoft365_8.2.0.2202.iso"
+    vb365_iso_filename: "VeeamBackupMicrosoft365_8.2.0.2202.iso"
+    vb365_iso_path: "C:\\{{ vb365_iso_filename }}"
+    
+    # Disse variabler forventes fra Terraform-genereret fil
+    # postgres_host: "{{ postgres_host }}"
+    # postgres_port: "{{ postgres_port | default(5432) }}"
+    # postgres_database: "{{ postgres_database }}"
+    # postgres_user: "{{ postgres_user }}"
+    # postgres_password: "{{ postgres_password }}"
+    # nats_host: "{{ nats_host }}"
+    # nats_port: "{{ nats_port | default(4222) }}"
+    
+  tasks:
+    - name: Set timezone to GMT Standard Time
+      ansible.windows.win_timezone:
+        timezone: GMT Standard Time
+
+    - name: Download VB365 v8.2 installer
+      ansible.windows.win_get_url:
+        url: "{{ vb365_iso_url }}"
+        dest: "{{ vb365_iso_path }}"
+        timeout: 3600
+      register: download_result
+
+    - name: Mount VB365 ISO
+      community.windows.win_disk_image:
+        image_path: "{{ vb365_iso_path }}"
+        state: present
+      register: disk_image_out
+
+    - name: Display mount path for debugging
+      ansible.builtin.debug:
+        var: disk_image_out.mount_paths[0]
+
+    - name: Install VB365 v8.2 with external PostgreSQL and NATS
+      ansible.windows.win_package:
+        path: "{{ disk_image_out.mount_paths[0] }}Backup\\Veeam.Backup365.msi"
+        arguments: >-
+          /qn
+          ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365
+          ACCEPT_THIRDPARTY_LICENSES=1
+          ACCEPT_EULA=1
+          PGSQL_HOST={{ postgres_host }}
+          PGSQL_PORT={{ postgres_port | default(5432) }}
+          PGSQL_DATABASE={{ postgres_database }}
+          PGSQL_LOGIN={{ postgres_user }}
+          PGSQL_PASSWORD={{ postgres_password }}
+          NATS_HOST={{ nats_host }}
+          NATS_PORT={{ nats_port | default(4222) }}
+        state: present
+        product_id: "{3F8E3E4D-7E3E-4F3E-8E3E-4F3E8E3E4F3E}"
+      register: install_result
+
+    - name: Display installation result
+      ansible.builtin.debug:
+        var: install_result
+
+    - name: Unmount ISO
+      community.windows.win_disk_image:
+        image_path: "{{ vb365_iso_path }}"
+        state: absent
+
+    - name: Configure MaxUserPort registry setting
+      ansible.windows.win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters
+        name: MaxUserPort
+        data: 65000
+        type: dword
+
+    - name: Configure TcpTimedWaitDelay registry setting
+      ansible.windows.win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters
+        name: TcpTimedWaitDelay
+        data: 30
+        type: dword
+
+    - name: Configure DNS client settings
+      community.windows.win_dns_client:
+        adapter_names: '*'
+        ipv4_addresses:
+          - 10.251.132.7
+          - 10.251.132.6
+        log_path: C:\dns_log.txt
+
+    - name: Join domain
+      community.windows.win_domain_membership:
+        dns_domain_name: VB365.2any.cloud
+        domain_admin_user: ADSA@VB365.2any.cloud
+        domain_admin_password: d!s6*NPtLebfpMgU9KzQoMQ.bEUt4Zrkx
+        state: domain
+      register: domain_state
+
+    - name: Display domain join result
+      ansible.builtin.debug:
+        var: domain_state
+
+    - name: Configure firewall - Remote Desktop (3389)
+      community.windows.win_firewall_rule:
+        name: Remote Desktop
+        localport: 3389
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
+
+    - name: Configure firewall - Controller Communication (9193)
+      community.windows.win_firewall_rule:
+        name: Controller Communication 9193
+        localport: 9193
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
+
+    - name: Configure firewall - SMB (445)
+      community.windows.win_firewall_rule:
+        name: Controller Communication 445
+        localport: 445
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
+
+    - name: Configure firewall - Controller Communication (9194)
+      community.windows.win_firewall_rule:
+        name: Controller Communication 9194
+        localport: 9194
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
+
+    - name: Configure firewall - HTTPS (443)
+      community.windows.win_firewall_rule:
+        name: Controller Communication 443
+        localport: 443
+        action: allow
+        direction: in
+        protocol: tcp
+        state: present
+        enabled: yes
+
+    - name: Configure firewall - PostgreSQL (5432)
+      community.windows.win_firewall_rule:
+        name: PostgreSQL
+        localport: 5432
+        action: allow
+        direction: out
+        protocol: tcp
+        state: present
+        enabled: yes
+      when: postgres_host is defined
+
+    - name: Configure firewall - NATS (4222)
+      community.windows.win_firewall_rule:
+        name: NATS
+        localport: 4222
+        action: allow
+        direction: out
+        protocol: tcp
+        state: present
+        enabled: yes
+      when: nats_host is defined
+
+    - name: Reboot server after installation
+      ansible.windows.win_reboot:
+        reboot_timeout: 600
