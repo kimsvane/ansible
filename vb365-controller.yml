@@ -175,3 +175,27 @@
     - name: Reboot server after installation
       ansible.windows.win_reboot:
         reboot_timeout: 600
+
+
+
+
+#         # PostgreSQL connection details
+# postgres_host: "postgres-server.vb365.2any.cloud"
+# postgres_port: 5432
+# postgres_database: "VeeamBackup365"
+# postgres_user: "veeam_admin"
+# postgres_password: "{{ vault_postgres_password }}"  # Brug Ansible Vault!
+
+# # NATS connection details
+# nats_host: "nats-server.vb365.2any.cloud"
+# nats_port: 4222
+
+# # Domain information (hvis de skal variere per miljø)
+# domain_name: "VB365.2any.cloud"
+# domain_admin_user: "ADSA@VB365.2any.cloud"
+# domain_admin_password: "{{ vault_domain_password }}"  # Brug Ansible Vault!
+
+# # DNS servers
+# dns_servers:
+#   - 10.251.132.7
+#   - 10.251.132.6
