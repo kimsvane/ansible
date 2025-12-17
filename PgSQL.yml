@@ -1,0 +1,225 @@
+---
+# postgresql_install.yml - With dedicated disk support
+- name: Install and Configure PostgreSQL 15.14 for Veeam VB365
+  hosts: postgresql
+  become: yes
+  gather_facts: yes
+  
+  tasks:
+    # Disk preparation
+    - name: Check if data disk exists
+      ansible.builtin.stat:
+        path: "{{ pgsql_data_disk }}"
+      register: data_disk
+      when: pgsql_data_disk is defined
+
+    - name: Create filesystem on data disk
+      ansible.builtin.filesystem:
+        fstype: xfs
+        dev: "{{ pgsql_data_disk }}"
+        opts: -n ftype=1
+      when: 
+        - pgsql_data_disk is defined
+        - data_disk.stat.exists
+
+    - name: Create PostgreSQL mount point
+      ansible.builtin.file:
+        path: "{{ pgsql_mount_point }}"
+        state: directory
+        mode: '0755'
+      when: pgsql_data_disk is defined
+
+    - name: Mount data disk
+      ansible.posix.mount:
+        path: "{{ pgsql_mount_point }}"
+        src: "{{ pgsql_data_disk }}"
+        fstype: xfs
+        opts: defaults,noatime
+        state: mounted
+      when: 
+        - pgsql_data_disk is defined
+        - data_disk.stat.exists
+
+    - name: Set correct ownership on mount point
+      ansible.builtin.file:
+        path: "{{ pgsql_mount_point }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+      when: pgsql_data_disk is defined
+
+    # PostgreSQL installation
+    - name: Install PostgreSQL repository
+      ansible.builtin.dnf:
+        name: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-{{ ansible_distribution_major_version }}-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
+        state: present
+        disable_gpg_check: yes
+
+    - name: Disable built-in PostgreSQL module
+      ansible.builtin.command: dnf -qy module disable postgresql
+      changed_when: false
+
+    - name: Install PostgreSQL 15 and dependencies
+      ansible.builtin.dnf:
+        name:
+          - "postgresql{{ postgresql_version }}-server"
+          - "postgresql{{ postgresql_version }}-contrib"
+          - python3-psycopg2
+        state: present
+
+    - name: Check if PostgreSQL is initialized
+      ansible.builtin.stat:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/PG_VERSION"
+      register: pgdata
+
+    - name: Initialize PostgreSQL
+      ansible.builtin.command: "/usr/pgsql-{{ postgresql_version }}/bin/postgresql-{{ postgresql_version }}-setup initdb"
+      when: not pgdata.stat.exists
+      environment:
+        PGSETUP_INITDB_OPTIONS: "--data-checksums"
+
+    - name: Configure PostgreSQL - listen_addresses
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?listen_addresses"
+        line: "listen_addresses = '*'"
+
+    - name: Configure PostgreSQL - port
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?port"
+        line: "port = {{ postgresql_port }}"
+
+    - name: Configure PostgreSQL - max_connections
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?max_connections"
+        line: "max_connections = 200"
+
+    - name: Configure PostgreSQL - shared_buffers
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?shared_buffers"
+        line: "shared_buffers = 4GB"
+
+    - name: Configure PostgreSQL - effective_cache_size
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?effective_cache_size"
+        line: "effective_cache_size = 12GB"
+
+    - name: Configure PostgreSQL - maintenance_work_mem
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?maintenance_work_mem"
+        line: "maintenance_work_mem = 1GB"
+
+    - name: Configure PostgreSQL - work_mem
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?work_mem"
+        line: "work_mem = 16MB"
+
+    - name: Configure PostgreSQL - wal_buffers
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?wal_buffers"
+        line: "wal_buffers = 16MB"
+
+    - name: Configure PostgreSQL - checkpoint_completion_target
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?checkpoint_completion_target"
+        line: "checkpoint_completion_target = 0.9"
+
+    - name: Configure PostgreSQL - random_page_cost (for SSD)
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?random_page_cost"
+        line: "random_page_cost = 1.1"
+
+    - name: Configure PostgreSQL - effective_io_concurrency
+      ansible.builtin.lineinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        regexp: "^#?effective_io_concurrency"
+        line: "effective_io_concurrency = 200"
+
+    - name: Configure pg_hba.conf for remote access
+      ansible.builtin.blockinfile:
+        path: "/var/lib/pgsql/{{ postgresql_version }}/data/pg_hba.conf"
+        block: |
+          # Veeam VB365 Access
+          {% for network in allowed_networks %}
+          host    all    all    {{ network }}    scram-sha-256
+          {% endfor %}
+        marker: "# {mark} VEEAM VB365"
+
+    - name: Start and enable PostgreSQL
+      ansible.builtin.systemd:
+        name: "postgresql-{{ postgresql_version }}"
+        state: started
+        enabled: yes
+
+    - name: Wait for PostgreSQL to be ready
+      ansible.builtin.wait_for:
+        port: "{{ postgresql_port }}"
+        delay: 5
+        timeout: 60
+
+    - name: Set postgres superuser password
+      ansible.builtin.shell: |
+        sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '{{ postgres_superuser_password }}';"
+      no_log: true
+
+    - name: Create Veeam database
+      ansible.builtin.shell: |
+        sudo -u postgres psql -c "CREATE DATABASE {{ veeam_db_name }} ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C' TEMPLATE=template0;"
+      ignore_errors: yes
+
+    - name: Create Veeam user
+      ansible.builtin.shell: |
+        sudo -u postgres psql -c "CREATE USER {{ veeam_db_user }} WITH PASSWORD '{{ veeam_db_password }}';"
+      no_log: true
+      ignore_errors: yes
+
+    - name: Grant privileges to Veeam user
+      ansible.builtin.shell: |
+        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE {{ veeam_db_name }} TO {{ veeam_db_user }};"
+        sudo -u postgres psql -c "ALTER USER {{ veeam_db_user }} CREATEDB;"
+
+    - name: Open firewall for PostgreSQL (5432)
+      ansible.builtin.firewalld:
+        port: "{{ postgresql_port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+
+    - name: Get PostgreSQL status
+      ansible.builtin.command: systemctl status postgresql-15
+      register: pg_status
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Get disk usage
+      ansible.builtin.command: df -h {{ pgsql_mount_point }}
+      register: disk_usage
+      changed_when: false
+      when: pgsql_data_disk is defined
+
+    - name: Display installation summary
+      ansible.builtin.debug:
+        msg:
+          - "================================================"
+          - "PostgreSQL 15.14 Installation Complete!"
+          - "================================================"
+          - "Host: {{ ansible_default_ipv4.address }}"
+          - "Port: {{ postgresql_port }}"
+          - "Database: {{ veeam_db_name }}"
+          - "User: {{ veeam_db_user }}"
+          - "================================================"
+          - "Disk Usage:"
+          - "{{ disk_usage.stdout_lines | default('N/A') }}"
+          - "================================================"
+          - "Service Status: {{ 'Running' if 'active (running)' in pg_status.stdout else 'Check Manually' }}"
+          - "================================================"

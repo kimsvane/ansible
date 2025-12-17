@@ -1,0 +1,191 @@
+- name: Install and Configure NATS Server 2.10.28 for Veeam Backup for Microsoft 365
+  hosts: nats
+  become: yes
+  vars:
+    nats_version: "2.10.28"
+    nats_port: 4222
+    nats_http_port: 8222
+    nats_user: "veeam_nats"
+    nats_password: "{{ vault_nats_password }}"
+    nats_install_dir: "/opt/nats"
+    nats_data_dir: "/var/lib/nats"
+    nats_log_dir: "/var/log/nats"
+    
+  tasks:
+    - name: Create NATS system user
+      ansible.builtin.user:
+        name: nats
+        system: yes
+        shell: /sbin/nologin
+        home: "{{ nats_data_dir }}"
+        create_home: yes
+
+    - name: Create NATS directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: nats
+        group: nats
+        mode: '0755'
+      loop:
+        - "{{ nats_install_dir }}"
+        - "{{ nats_data_dir }}"
+        - "{{ nats_data_dir }}/jetstream"
+        - "{{ nats_log_dir }}"
+        - /etc/nats
+
+    - name: Download NATS Server {{ nats_version }}
+      ansible.builtin.get_url:
+        url: "https://github.com/nats-io/nats-server/releases/download/v{{ nats_version }}/nats-server-v{{ nats_version }}-linux-amd64.tar.gz"
+        dest: "/tmp/nats-server-v{{ nats_version }}.tar.gz"
+        mode: '0644'
+
+    - name: Extract NATS Server
+      ansible.builtin.unarchive:
+        src: "/tmp/nats-server-v{{ nats_version }}.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+
+    - name: Copy NATS binary to installation directory
+      ansible.builtin.copy:
+        src: "/tmp/nats-server-v{{ nats_version }}-linux-amd64/nats-server"
+        dest: "{{ nats_install_dir }}/nats-server"
+        owner: root
+        group: root
+        mode: '0755'
+        remote_src: yes
+
+    - name: Create symlink for NATS binary
+      ansible.builtin.file:
+        src: "{{ nats_install_dir }}/nats-server"
+        dest: /usr/local/bin/nats-server
+        state: link
+
+    - name: Clean up downloaded files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/nats-server-v{{ nats_version }}.tar.gz"
+        - "/tmp/nats-server-v{{ nats_version }}-linux-amd64"
+
+    - name: Create NATS configuration file
+      ansible.builtin.copy:
+        dest: /etc/nats/nats-server.conf
+        owner: nats
+        group: nats
+        mode: '0640'
+        content: |
+          # NATS Server Configuration for Veeam Backup for Microsoft 365
+          
+          # Network settings
+          port: {{ nats_port }}
+          
+          # HTTP monitoring
+          http_port: {{ nats_http_port }}
+          
+          # JetStream configuration
+          jetstream {
+            store_dir: "{{ nats_data_dir }}/jetstream"
+            max_mem: 1G
+            max_file: 10G
+          }
+          
+          # Authorization
+          authorization {
+            user: "{{ nats_user }}"
+            password: "{{ nats_password }}"
+          }
+          
+          # Logging
+          logfile: "{{ nats_log_dir }}/nats-server.log"
+          log_size_limit: 100MB
+          max_traced_msg_len: 512
+          
+          # Performance tuning
+          max_connections: 1000
+          max_control_line: 4096
+          max_payload: 1048576
+          max_pending: 67108864
+          write_deadline: "10s"
+          
+          # Server limits
+          max_subscriptions: 0
+
+    - name: Create NATS systemd service file
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/nats.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=NATS Server
+          Documentation=https://docs.nats.io
+          After=network.target
+          
+          [Service]
+          Type=simple
+          ExecStart={{ nats_install_dir }}/nats-server -c /etc/nats/nats-server.conf
+          ExecReload=/bin/kill -s HUP $MAINPID
+          ExecStop=/bin/kill -s SIGINT $MAINPID
+          User=nats
+          Group=nats
+          Restart=always
+          RestartSec=5s
+          LimitNOFILE=1000000
+          PrivateTmp=true
+          
+          # Hardening
+          NoNewPrivileges=true
+          PrivateDevices=true
+          ProtectSystem=strict
+          ProtectHome=true
+          ReadWritePaths={{ nats_data_dir }} {{ nats_log_dir }}
+          
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Start and enable NATS service
+      ansible.builtin.systemd:
+        name: nats
+        state: started
+        enabled: yes
+
+    - name: Wait for NATS to be ready
+      ansible.builtin.wait_for:
+        port: "{{ nats_port }}"
+        delay: 2
+        timeout: 30
+
+    - name: Open firewall for NATS client port
+      ansible.posix.firewalld:
+        port: "{{ nats_port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+
+    - name: Open firewall for NATS monitoring port
+      ansible.posix.firewalld:
+        port: "{{ nats_http_port }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+
+    - name: Verify NATS installation
+      ansible.builtin.command: nats-server --version
+      register: nats_version_output
+      changed_when: false
+
+    - name: Display NATS connection information
+      ansible.builtin.debug:
+        msg:
+          - "NATS Server {{ nats_version }} installation completed successfully!"
+          - "Version: {{ nats_version_output.stdout }}"
+          - "Connection URL: nats://{{ nats_user }}:{{ nats_password }}@{{ ansible_default_ipv4.address }}:{{ nats_port }}"
+          - "Monitoring URL: http://{{ ansible_default_ipv4.address }}:{{ nats_http_port }}"
+          - "JetStream data directory: {{ nats_data_dir }}/jetstream"
