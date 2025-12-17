@@ -39,6 +39,12 @@
         url: "https://github.com/nats-io/nats-server/releases/download/v{{ nats_version }}/nats-server-v{{ nats_version }}-linux-amd64.tar.gz"
         dest: "/tmp/nats-server-v{{ nats_version }}.tar.gz"
         mode: '0644'
+    - name: Install extraction tools
+      ansible.builtin.package:
+        name:
+          - tar
+          - unzip
+        state: present
 
     - name: Extract NATS Server
       ansible.builtin.unarchive:
