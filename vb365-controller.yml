@@ -50,8 +50,8 @@
           DATABASE={{ postgres_database }}
           USERNAME={{ postgres_user }}
           PASSWORD={{ postgres_password }}
-          NATS_HOST={{ nats_host }}
-          NATS_PORT={{ nats_port | default(4222) }}
+          # NATS_HOST={{ nats_host }}
+          # NATS_PORT={{ nats_port | default(4222) }}
           JETSTREAM_CONNECTION="nats://{{ nats_username }}:{{ nats_password }}@{{ nats_host }}:{{ nats_port | default(4222) }}"
         state: present
         product_id: "{3F8E3E4D-7E3E-4F3E-8E3E-4F3E8E3E4F3E}"
