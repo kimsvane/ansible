@@ -6,7 +6,7 @@
     nats_port: 4222
     nats_http_port: 8222
     nats_user: "veeam_nats"
-    nats_password: "{{ vault_nats_password }}"
+    nats_password: "{{ nats_password }}"
     nats_install_dir: "/opt/nats"
     nats_data_dir: "/var/lib/nats"
     nats_log_dir: "/var/log/nats"
