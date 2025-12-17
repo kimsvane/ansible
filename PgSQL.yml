@@ -6,7 +6,6 @@
   gather_facts: yes
   
   tasks:
-    # Disk preparation
     - name: Check if data disk exists
       ansible.builtin.stat:
         path: "{{ pgsql_data_disk }}"
@@ -22,6 +21,14 @@
         - pgsql_data_disk is defined
         - data_disk.stat.exists
 
+    - name: Get UUID of the newly formatted disk
+      ansible.builtin.command: "blkid -s UUID -o value {{ pgsql_data_disk }}"
+      register: disk_uuid_result
+      changed_when: false
+      when: 
+        - pgsql_data_disk is defined
+        - data_disk.stat.exists
+        
     - name: Create PostgreSQL mount point
       ansible.builtin.file:
         path: "{{ pgsql_mount_point }}"
@@ -29,16 +36,17 @@
         mode: '0755'
       when: pgsql_data_disk is defined
 
-    - name: Mount data disk
+    - name: Mount data disk using UUID
       ansible.posix.mount:
         path: "{{ pgsql_mount_point }}"
-        src: "{{ pgsql_data_disk }}"
+        src: "UUID={{ disk_uuid_result.stdout }}" 
         fstype: xfs
         opts: defaults,noatime
         state: mounted
       when: 
         - pgsql_data_disk is defined
         - data_disk.stat.exists
+        - disk_uuid_result is defined  
 
 
 
