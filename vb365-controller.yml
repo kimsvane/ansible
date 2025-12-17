@@ -1,4 +1,3 @@
-  ---
 - name: VB365 v8.2 Download and Installation
   hosts: all
   vars:
