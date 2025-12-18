@@ -163,6 +163,9 @@
           local   all             all                                     scram-sha-256
           host    all             all             127.0.0.1/32            scram-sha-256
           host    all             all             ::1/128                 scram-sha-256
+          # Allow postgres superuser from localhost with password
+          host    all             postgres        127.0.0.1/32            scram-sha-256
+          host    all             postgres        ::1/128                 scram-sha-256
         marker: "# {mark} LOCAL PGBOUNCER ACCESS"
         insertbefore: "^# TYPE"
 
@@ -220,22 +223,16 @@
       ansible.builtin.shell: |
         sudo -u postgres psql -d postgres -c "GRANT EXECUTE ON FUNCTION user_search(text) TO {{ pgbouncer_db_user }};"
 
-    # Veeam Database Setup
-    - name: Create Veeam database
-      ansible.builtin.shell: |
-        sudo -u postgres psql -c "CREATE DATABASE {{ veeam_db_name }} ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C' TEMPLATE=template0;"
-      ignore_errors: yes
-
-    - name: Create Veeam user
+    # Veeam User Setup - Veeam will create the database itself
+    - name: Create Veeam admin user with full privileges
       ansible.builtin.shell: |
         sudo -u postgres psql -c "CREATE USER {{ veeam_db_user }} WITH PASSWORD '{{ veeam_db_password }}';"
       no_log: true
       ignore_errors: yes
 
-    - name: Grant privileges to Veeam user
+    - name: Grant superuser privileges to Veeam user (required for database creation)
       ansible.builtin.shell: |
-        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE {{ veeam_db_name }} TO {{ veeam_db_user }};"
-        sudo -u postgres psql -c "ALTER USER {{ veeam_db_user }} CREATEDB;"
+        sudo -u postgres psql -c "ALTER USER {{ veeam_db_user }} WITH SUPERUSER CREATEROLE CREATEDB;"
 
     - name: Open firewall for PostgreSQL
       ansible.builtin.firewalld:
@@ -289,7 +286,6 @@
           ;;;
 
           [databases]
-          {{ veeam_db_name }} = host=127.0.0.1 port={{ postgresql_port }} dbname={{ veeam_db_name }}
           postgres = host=127.0.0.1 port={{ postgresql_port }} dbname=postgres
 
           [pgbouncer]
@@ -428,9 +424,9 @@
       changed_when: false
       when: pgsql_data_disk is defined
 
-    - name: Test PgBouncer connection
+    - name: Test PgBouncer connection with Veeam user
       ansible.builtin.shell: |
-        PGPASSWORD='{{ veeam_db_password }}' psql -h 127.0.0.1 -p 6432 -U {{ veeam_db_user }} -d {{ veeam_db_name }} -c "SELECT version();"
+        PGPASSWORD='{{ veeam_db_password }}' psql -h 127.0.0.1 -p 6432 -U {{ veeam_db_user }} -d postgres -c "SELECT version();"
       register: pgbouncer_test
       changed_when: false
       ignore_errors: yes
@@ -445,8 +441,7 @@
           - "PostgreSQL Configuration:"
           - "  - Host: {{ ansible_default_ipv4.address }}"
           - "  - Port: {{ postgresql_port }}"
-          - "  - Database: {{ veeam_db_name }}"
-          - "  - User: {{ veeam_db_user }}"
+          - "  - Admin User: {{ veeam_db_user }} (SUPERUSER with CREATEDB and CREATEROLE)"
           - "  - Max Connections: {{ (pgbouncer_max_user_connections * 1.10) | int }}"
           - "  - Status: {{ 'Running' if 'active (running)' in pg_status.stdout else 'Check Manually' }}"
           - "-----------------------------------------------------------------------"
@@ -466,7 +461,11 @@
           - ""
           - "IMPORTANT - Veeam VB365 Configuration:"
           - "  1. Use PgBouncer port 6432 (NOT PostgreSQL port {{ postgresql_port }})"
-          - "  2. Connection string: host={{ ansible_default_ipv4.address }};port=6432"
-          - "  3. PgBouncer is configured per Veeam KB4728 specifications"
-          - "  4. Review /var/log/pgbouncer/pgbouncer.log for connection details"
+          - "  2. Server: {{ ansible_default_ipv4.address }}"
+          - "  3. Port: 6432"
+          - "  4. Database: postgres (Veeam will create VeeamBackup365 automatically)"
+          - "  5. Username: {{ veeam_db_user }}"
+          - "  6. Password: <your veeam_db_password>"
+          - "  7. Veeam will automatically create the VeeamBackup365 database"
+          - "  8. {{ veeam_db_user }} has SUPERUSER, CREATEDB, and CREATEROLE privileges"
           - "======================================================================="
