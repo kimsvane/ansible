@@ -41,7 +41,7 @@
       ansible.windows.win_package:
         path: "{{ disk_image_out.mount_paths[0] }}Backup\\Veeam.Backup365.msi"
         arguments: >-
-          ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,PS_MODULES,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1 CONNECTION="Host={{ postgres_host }};Port={{ postgres_port | default(6432) }};Database={{ postgres_database }};Username={{ postgres_user }};Password={{ postgres_password }}" JETSTREAM_CONNECTION="nats://{{ nats_username }}:{{ nats_password }}@{{ nats_host }}:{{ nats_port | default(4222) }}"
+         /qn ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,PS_MODULES,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1 CONNECTION="Host={{ postgres_host }};Port={{ postgres_port | default(6432) }};Database={{ postgres_database }};Username={{ postgres_user }};Password={{ postgres_password }}" JETSTREAM_CONNECTION="nats://{{ nats_username }}:{{ nats_password }}@{{ nats_host }}:{{ nats_port | default(4222) }}"
         state: present
         product_id: "{3F8E3E4D-7E3E-4F3E-8E3E-4F3E8E3E4F3E}"
       register: install_result
