@@ -14,7 +14,8 @@
     # postgres_password: "{{ postgres_password }}"
     # nats_host: "{{ nats_host }}"
     # nats_port: "{{ nats_port | default(4222) }}"
-    
+  collections:
+    - community.windows
   tasks:
     - name: Set timezone to GMT Standard Time
       ansible.windows.win_timezone:
