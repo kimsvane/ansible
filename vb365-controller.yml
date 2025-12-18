@@ -70,14 +70,27 @@
         data: 30
         type: dword
 
-    - name: Configure DNS client settings
-      community.windows.win_dns_client:
-        adapter_names: '*'
-        ipv4_addresses:
-          - "{{ network_address }}.1"
-          - "{{ network_address }}.6"
-        log_path: C:\dns_log.txt
-
+    # - name: Configure DNS client settings
+    #   community.windows.win_dns_client:
+    #     adapter_names: '*'
+    #     ipv4_addresses:
+    #       - "{{ network_address }}.1"
+    #       - "{{ network_address }}.6"
+    #     log_path: C:\dns_log.txt
+    - name: Configure DNS client settings (PowerShell alternative)
+      ansible.windows.win_shell: |
+            # Find the adapter that is currently connected (e.g., has an IP address)
+            $adapter = Get-NetAdapter | Where-Object { $_.Status -eq "Up" -and $_.LinkSpeed -ne "" } | Select-Object -First 1
+            
+            # Hvis adapteren findes, sæt DNS-serverne
+            if ($adapter) {
+                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.1", "{{ network_address }}.6")
+                Write-Host "Successfully set DNS for adapter $($adapter.Name)"
+            } else {
+                Write-Host "No active network adapter found to set DNS."
+            }
+      # Du kan fjerne den fejlende opgave og erstatte den med denne:
+      # community.windows.win_dns_client: ... (Fjern denne)
     # - name: Join domain
     #   community.windows.win_domain_membership:
     #     dns_domain_name: VB365.2any.cloud
