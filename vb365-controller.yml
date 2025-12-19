@@ -52,13 +52,12 @@
             
             # Hvis adapteren findes, sæt DNS-serverne
             if ($adapter) {
-                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.56", "{{ network_address }}.6")
+                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.56", "{{ network_address }}.56")
                 Write-Host "Successfully set DNS for adapter $($adapter.Name)"
             } else {
                 Write-Host "No active network adapter found to set DNS."
             }
-      # Du kan fjerne den fejlende opgave og erstatte den med denne:
-      # community.windows.win_dns_client: ... (Fjern denne)
+
     - name: Join domain
       microsoft.ad.membership:
         dns_domain_name: "{{ domain }}"
