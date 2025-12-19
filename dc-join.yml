@@ -2,12 +2,12 @@
 - name: Join secondary DC to existing domain
   hosts: dc
   vars:
-    domain_name: "{{ domain_name }}"
-    dc_password: "{{ dc_password }}"
-    recovery_password: "{{ recovery_password }}"
-    upstream_dns_1: "{{ upstream_dns_1 }}"
-    upstream_dns_2: "{{ upstream_dns_2 }}"
-    ntp_servers: "{{ ntp_servers }}"
+    # domain_name: "{{ domain_name }}"
+    # dc_password: "{{ dc_password }}"
+    # recovery_password: "{{ recovery_password }}"
+    # upstream_dns_1: "{{ upstream_dns_1 }}"
+    # upstream_dns_2: "{{ upstream_dns_2 }}"
+    # ntp_servers: "{{ ntp_servers }}"
     ansible_connection: winrm
     ansible_port: 5986
     ansible_winrm_transport: ntlm

@@ -37,14 +37,7 @@
         data: 30
         type: dword
 
-    # - name: Configure DNS client settings
-    #   community.windows.win_dns_client:
-    #     adapter_names: '*'
-    #     ipv4_addresses:
-    #       - "{{ network_address }}.56"
-    #       - "{{ network_address }}.6"
-    #     log_path: C:\dns_log.txt
-
+ 
     - name: Configure DNS client settings (PowerShell alternative)
       ansible.windows.win_shell: |
             # Find the adapter that is currently connected (e.g., has an IP address)
