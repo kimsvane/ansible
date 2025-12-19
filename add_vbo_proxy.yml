@@ -20,18 +20,16 @@
           $vbCred = New-Object System.Management.Automation.PSCredential($vbUser, $vbPass)
 
           # 2. Opret forbindelse til VBO Server (Stopper ved fejl)
-          Connect-VBOServer -Server $vbHost -Credential $vbCred -ErrorAction Stop
+          #Connect-VBOServer -Server $vbHost -Credential $vbCred -ErrorAction Stop
 
           # 3. Definer variabler og SecureString for Linux Proxy
           $proxyHostname = "{{ proxy_fqdn }}"
           $pUser = "{{ proxy_username }}"
-          $pPass = ConvertTo-SecureString "{{ proxy_password }}" -AsPlainText -Force
+          $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
+
 
           # 4. Opret VBOLinuxCredential-objekt (Korrekt V8 Syntaks)
-          $LinuxCred = New-VBOLinuxCredential `
-            -Name "Ansible-{{ proxy_fqdn }}" ` 
-            -UserName $pUser `
-            -Password $pPass
+          $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
 
           # 5. Tjek om Proxy allerede eksisterer
           $existing = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
