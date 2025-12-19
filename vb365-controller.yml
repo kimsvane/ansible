@@ -61,10 +61,10 @@
       # community.windows.win_dns_client: ... (Fjern denne)
     - name: Join domain
       microsoft.ad.membership:
-        dns_domain_name: ssvanetest.int.ssvane.dk
-        domain_admin_user: administrator@ssvanetest
-        domain_admin_password: Vilkaarl1gk0d3!
-        domain_server: 192.168.3.56
+        dns_domain_name: "{{ domain }}"
+        domain_admin_user: "{{ domain_user }}@{{ domain }}"
+        domain_admin_password: "{{ domain_user_password }}"
+        domain_server: "{{ domain_controller }}"
         state: domain
       register: domain_state
 
