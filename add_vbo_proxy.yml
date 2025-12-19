@@ -4,7 +4,7 @@
   gather_facts: no
   become: no
 
-
+  # ... (Dine vars er kommenteret ud) ...
 
   tasks:
 
@@ -48,4 +48,4 @@
           } else {
               Write-Host "Proxy $proxyHostname eksisterer allerede."
           }
-        register: add_proxy_result
+      register: add_proxy_result 
