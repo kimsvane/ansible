@@ -60,10 +60,11 @@
       # Du kan fjerne den fejlende opgave og erstatte den med denne:
       # community.windows.win_dns_client: ... (Fjern denne)
     - name: Join domain
-      community.windows.win_domain_membership:
+      microsoft.ad.membership:
         dns_domain_name: ssvanetest.int.ssvane.dk
         domain_admin_user: administrator@ssvanetest
         domain_admin_password: Vilkaarl1gk0d3!
+        domain_server: 192.168.3.56
         state: domain
       register: domain_state
 
