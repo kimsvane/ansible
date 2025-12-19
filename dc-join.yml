@@ -1,13 +1,7 @@
 ---
-- name: Join secondary DC to existing domain
+- name: Promote server to secondary DC
   hosts: dc
   vars:
-    # domain_name: "{{ domain_name }}"
-    # dc_password: "{{ dc_password }}"
-    # recovery_password: "{{ recovery_password }}"
-    # upstream_dns_1: "{{ upstream_dns_1 }}"
-    # upstream_dns_2: "{{ upstream_dns_2 }}"
-    # ntp_servers: "{{ ntp_servers }}"
     ansible_connection: winrm
     ansible_port: 5986
     ansible_winrm_transport: ntlm
@@ -22,38 +16,39 @@
         timeout: 300
         host: "{{ ansible_host }}"
 
-    - name: Configure DNS before domain join
-      win_dns_client:
-        adapter_names: '*'
-        ipv4_addresses:
-          - "{{ upstream_dns_1 }}"
-          - "{{ upstream_dns_2 }}"
+    - name: Configure DNS to point to primary DC
+      ansible.windows.win_shell: |
+        $adapter = Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object -First 1
+        if ($adapter) {
+            # Peg på primær DC først, derefter denne server selv
+            Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ domain_controller }}", "127.0.0.1")
+            Write-Host "DNS configured for $($adapter.Name)"
+        }
 
-    - name: Join existing domain
-      win_domain_membership:
-        dns_domain_name: "{{ domain_name }}"
-        hostname: "{{ inventory_hostname }}"
-        domain_admin_user: "Administrator@{{ domain_name }}"
-        domain_admin_password: "{{ dc_password }}"
-        state: domain
-      register: join_result
-
-    - name: Reboot after join
-      win_reboot:
-        msg: "Rebooting after domain join"
-        pre_reboot_delay: 30
-      when: join_result.reboot_required
-
-    - name: Install AD DS on secondary DC
-      win_feature:
+    - name: Install AD DS feature
+      ansible.windows.win_feature:
         name: AD-Domain-Services
         include_management_tools: yes
         state: present
+      register: adds_install
 
-    - name: Promote server to domain controller
-      win_domain_controller:
-        domain_name: "{{ domain_name }}"
+    - name: Reboot if AD DS installation requires it
+      ansible.windows.win_reboot:
+        msg: "Rebooting after AD DS installation"
+      when: adds_install.reboot_required
+
+    - name: Promote to secondary domain controller
+      microsoft.ad.domain_controller:
+        dns_domain_name: "{{ domain_name }}"
+        domain_admin_user: "{{ domain_user }}@{{ domain_name }}"
+        domain_admin_password: "{{ domain_user_password }}"
         safe_mode_password: "{{ recovery_password }}"
-        state: domain_controller
         install_dns: yes
-        reboot_on_success: yes
+        state: domain_controller
+      register: dc_promotion
+
+    - name: Reboot after DC promotion
+      ansible.windows.win_reboot:
+        msg: "Rebooting after DC promotion"
+        post_reboot_delay: 60
+      when: dc_promotion.reboot_required
