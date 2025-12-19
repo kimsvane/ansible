@@ -21,40 +21,7 @@
       ansible.windows.win_timezone:
         timezone: GMT Standard Time
 
-    - name: Download VB365 v8.2 installer
-      ansible.windows.win_get_url:
-        url: "{{ vb365_iso_url }}"
-        dest: "{{ vb365_iso_path }}"
-        timeout: 3600
-      register: download_result
 
-    - name: Mount VB365 ISO
-      community.windows.win_disk_image:
-        image_path: "{{ vb365_iso_path }}"
-        state: present
-      register: disk_image_out
-
-    - name: Display mount path for debugging
-      ansible.builtin.debug:
-        var: disk_image_out.mount_paths[0]
-
-    - name: Install VB365 v8.2 with external PostgreSQL and NATS
-      ansible.windows.win_package:
-        path: "{{ disk_image_out.mount_paths[0] }}Backup\\Veeam.Backup365.msi"
-        arguments: >-
-          /L*V C:\Temp\veeam_install_log.log /qn ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1 CONNECTION="Host={{ postgres_host }};Port={{ postgres_port | default(6432) }};Database={{ postgres_database }};Username={{ postgres_user }};Password={{ postgres_password }}" JETSTREAM_CONNECTION="nats://{{ nats_username }}:{{ nats_password }}@{{ nats_host }}:{{ nats_port | default(4222) }}"
-        state: present
-        product_id: "{3F8E3E4D-7E3E-4F3E-8E3E-4F3E8E3E4F3E}"
-      register: install_result
-
-    - name: Display installation result
-      ansible.builtin.debug:
-        var: install_result
-
-    - name: Unmount ISO
-      community.windows.win_disk_image:
-        image_path: "{{ vb365_iso_path }}"
-        state: absent
 
     - name: Configure MaxUserPort registry setting
       ansible.windows.win_regedit:
@@ -74,9 +41,10 @@
     #   community.windows.win_dns_client:
     #     adapter_names: '*'
     #     ipv4_addresses:
-    #       - "{{ network_address }}.1"
+    #       - "{{ network_address }}.56"
     #       - "{{ network_address }}.6"
     #     log_path: C:\dns_log.txt
+
     - name: Configure DNS client settings (PowerShell alternative)
       ansible.windows.win_shell: |
             # Find the adapter that is currently connected (e.g., has an IP address)
@@ -84,24 +52,24 @@
             
             # Hvis adapteren findes, sæt DNS-serverne
             if ($adapter) {
-                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.1", "{{ network_address }}.6")
+                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.56", "{{ network_address }}.6")
                 Write-Host "Successfully set DNS for adapter $($adapter.Name)"
             } else {
                 Write-Host "No active network adapter found to set DNS."
             }
       # Du kan fjerne den fejlende opgave og erstatte den med denne:
       # community.windows.win_dns_client: ... (Fjern denne)
-    # - name: Join domain
-    #   community.windows.win_domain_membership:
-    #     dns_domain_name: VB365.2any.cloud
-    #     domain_admin_user: ADSA@VB365.2any.cloud
-    #     domain_admin_password: d!s6*NPtLebfpMgU9KzQoMQ.bEUt4Zrkx
-    #     state: domain
-    #   register: domain_state
+    - name: Join domain
+      community.windows.win_domain_membership:
+        dns_domain_name: ssvanetest.int.ssvane.dk
+        domain_admin_user: administrator@ssvanetest
+        domain_admin_password: Vilkaarl1gk0d3!
+        state: domain
+      register: domain_state
 
-    # - name: Display domain join result
-    #   ansible.builtin.debug:
-    #     var: domain_state
+    - name: Display domain join result
+      ansible.builtin.debug:
+        var: domain_state
 
     - name: Configure firewall - Remote Desktop (3389)
       community.windows.win_firewall_rule:
@@ -175,11 +143,46 @@
         enabled: yes
       when: nats_host is defined
 
+
+    - name: Download VB365 v8.2 installer
+      ansible.windows.win_get_url:
+        url: "{{ vb365_iso_url }}"
+        dest: "{{ vb365_iso_path }}"
+        timeout: 3600
+      register: download_result
+
+    - name: Mount VB365 ISO
+      community.windows.win_disk_image:
+        image_path: "{{ vb365_iso_path }}"
+        state: present
+      register: disk_image_out
+
+    - name: Display mount path for debugging
+      ansible.builtin.debug:
+        var: disk_image_out.mount_paths[0]
+
+    - name: Install VB365 v8.2 with external PostgreSQL and NATS
+      ansible.windows.win_package:
+        path: "{{ disk_image_out.mount_paths[0] }}Backup\\Veeam.Backup365.msi"
+        arguments: >-
+          /L*V C:\Temp\veeam_install_log.log /qn ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1 CONNECTION="Host={{ postgres_host }};Port={{ postgres_port | default(6432) }};Database={{ postgres_database }};Username={{ postgres_user }};Password={{ postgres_password }}" JETSTREAM_CONNECTION="nats://{{ nats_username }}:{{ nats_password }}@{{ nats_host }}:{{ nats_port | default(4222) }}"
+        state: present
+        product_id: "{3F8E3E4D-7E3E-4F3E-8E3E-4F3E8E3E4F3E}"
+      register: install_result
+
+    - name: Display installation result
+      ansible.builtin.debug:
+        var: install_result
+
+    - name: Unmount ISO
+      community.windows.win_disk_image:
+        image_path: "{{ vb365_iso_path }}"
+        state: absent
+
+
     - name: Reboot server after installation
       ansible.windows.win_reboot:
         reboot_timeout: 600
-
-
 #Kør kommando til at sætte restore drev op
 #Kør kommando til at sætte veeam til at bruge restor drev
 
