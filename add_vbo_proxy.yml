@@ -4,52 +4,48 @@
   gather_facts: no
   become: no
 
-  # vars:
-  #   vb365_hostname: "{{ vb365_hostname }}"
-  #   vb365_username: "{{ vb365_username }}"
-  #   vb365_password: "{{ vb365_password }}"
-  #   proxy_fqdn: "{{ proxy_fqdn }}"
-  #   proxy_username: "{{ proxy_username }}"
-  #   proxy_password: "{{ proxy_password }}"
-  #   proxy_port: "{{ proxy_port | default(22) }}"
+
 
   tasks:
 
-  - name: Tilføj Linux Proxy i Veeam Backup for Microsoft 365
-    ansible.windows.win_powershell:
-          script: |
+    - name: Tilføj Linux Proxy i Veeam Backup for Microsoft 365
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module Veeam.Archiver.PowerShell
 
-            Import-Module Veeam.Archiver.PowerShell
+          # 1. VBO Server Legitimationsoplysninger
+          $vbHost = "{{ vb365_hostname }}"
+          $vbUser = "{{ vb365_username }}"
+          $vbPass = ConvertTo-SecureString "{{ vb365_password }}" -AsPlainText -Force
+          $vbCred = New-Object System.Management.Automation.PSCredential($vbUser, $vbPass)
 
+          # 2. Opret forbindelse til VBO Server (Stopper ved fejl)
+          Connect-VBOServer -Server $vbHost -Credential $vbCred -ErrorAction Stop
 
-            $vbHost = "{{ vb365_hostname }}"
-            $vbUser = "{{ vb365_username }}"
-            $vbPass = ConvertTo-SecureString "{{ vb365_password }}" -AsPlainText -Force
-            $vbCred = New-Object System.Management.Automation.PSCredential($vbUser, $vbPass)
+          # 3. Definer variabler og SecureString for Linux Proxy
+          $proxyHostname = "{{ proxy_fqdn }}"
+          $pUser = "{{ proxy_username }}"
+          $pPass = ConvertTo-SecureString "{{ proxy_password }}" -AsPlainText -Force
 
+          # 4. Opret VBOLinuxCredential-objekt (Korrekt V8 Syntaks)
+          $LinuxCred = New-VBOLinuxCredential `
+            -Name "Ansible-{{ proxy_fqdn }}" ` 
+            -UserName $pUser `
+            -Password $pPass
 
-            Connect-VBOServer -Server $vbHost -Credential $vbCred -ErrorAction Stop
+          # 5. Tjek om Proxy allerede eksisterer
+          $existing = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
 
+          if (!$existing) {
 
-            $proxyHostname = "{{ proxy_fqdn }}"
-            $pUser = "{{ proxy_username }}"
-            $pPass = ConvertTo-SecureString "{{ proxy_password }}" -AsPlainText -Force
-            $pCred = New-Object System.Management.Automation.PSCredential($pUser, $pPass)
-
-
-            $LinuxCred = New-VBOLinuxCredential -Credentials $pCred
-
-            $existing = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
-
-            if (!$existing) {
-
-                Add-VBOProxy `
-                  -Hostname $proxyHostname ` 
-                  -LinuxCredential $LinuxCred `
-                  -Port {{ proxy_port }}
-                
-                Write-Host "Proxy $proxyHostname er tilføjet."
-            } else {
-                Write-Host "Proxy $proxyHostname eksisterer allerede."
-            }
-            register: add_proxy_result}
+              # 6. Tilføj Proxy (Korrekt V8 Syntaks)
+              Add-VBOProxy `
+                -Hostname $proxyHostname ` 
+                -LinuxCredential $LinuxCred `
+                -Port {{ proxy_port }}
+              
+              Write-Host "Proxy $proxyHostname er tilføjet."
+          } else {
+              Write-Host "Proxy $proxyHostname eksisterer allerede."
+          }
+        register: add_proxy_result
