@@ -11,33 +11,36 @@
     - name: Tilføj Linux Proxy i Veeam Backup for Microsoft 365
       ansible.windows.win_powershell:
         script: |
-          # Import Veeam PowerShell-modulet. 
-          # Ved at køre dette lokalt på VBO-serveren, får vi automatisk adgang til VBO-context.
           Import-Module Veeam.Archiver.PowerShell
 
-          # 1. Definer variabler og SecureString for Linux Proxy
+          # # 1. VBO Server Legitimationsoplysninger
+          # $vbHost = "{{ vb365_hostname }}"
+          # $vbUser = "{{ vb365_username }}"
+          # $vbPass = ConvertTo-SecureString "{{ vb365_password }}" -AsPlainText -Force
+          # $vbCred = New-Object System.Management.Automation.PSCredential($vbUser, $vbPass)
+
+          # 2. Opret forbindelse til VBO Server (Stopper ved fejl)
+          #Connect-VBOServer -Server $vbHost -Credential $vbCred -ErrorAction Stop
+
+          # 3. Definer variabler og SecureString for Linux Proxy
           $proxyHostname = "{{ proxy_fqdn }}"
           $pUser = "{{ proxy_username }}"
           $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
 
-          # 2. Opret VBOLinuxCredential-objekt (Syntaksen er nu valideret til din version)
-          # Dette opretter et credential-objekt, som VBO kan gemme og bruge til SSH-forbindelse.
+
+          # 4. Opret VBOLinuxCredential-objekt (Korrekt V8 Syntaks)
           $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
 
-          # 3. Tjek om Proxy allerede eksisterer
+          # 5. Tjek om Proxy allerede eksisterer
           $existing = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
 
           if (!$existing) {
 
-              # 4. Tilføj Proxy 
-              # RETTET: Bruger den ældre parameter -Credential (som din VBO-version genkender)
-              Add-VBOProxy `
-                -Hostname $proxyHostname ` 
-                -Credential $LinuxCred ` 
-                -Port {{ proxy_port }}
+              # 6. Tilføj Proxy (Korrekt V8 Syntaks)
+              Add-VBOProxy -Hostname $proxyHostname -LinuxCredential $LinuxCred -Port {{ proxy_port }} -Force
               
               Write-Host "Proxy $proxyHostname er tilføjet."
           } else {
               Write-Host "Proxy $proxyHostname eksisterer allerede."
           }
-      register: add_proxy_result
+      register: add_proxy_result 
