@@ -21,6 +21,7 @@
       retries: 3
       delay: 10
       until: admin_pw_result is succeeded
+      
     
     # ---- LØSNING 6 STARTER HER ----
     - name: Create logging directory
