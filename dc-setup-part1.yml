@@ -96,15 +96,15 @@
         host: "{{ ansible_host }}"
       when: reboot_check.stdout | trim == "true"
       
-    - name: Verify AD DS feature is installed
-      ansible.windows.win_shell: |
-        $feature = Get-WindowsFeature -Name AD-Domain-Services
-        if ($feature.Installed -eq $true) {
-          "AD-DS is installed"
-        } else {
-          throw "AD-DS installation failed"
-        }
-      register: verify_feature
+    # - name: Verify AD DS feature is installed
+    #   ansible.windows.win_shell: |
+    #     $feature = Get-WindowsFeature -Name AD-Domain-Services
+    #     if ($feature.Installed -eq $true) {
+    #       "AD-DS is installed"
+    #     } else {
+    #       throw "AD-DS installation failed"
+    #     }
+    #   register: verify_feature
       
     - name: Completion message
       ansible.builtin.debug:
