@@ -16,6 +16,8 @@
     # nats_port: "{{ nats_port | default(4222) }}"
   collections:
     - community.windows
+    - ansible.windows
+    - microsoft.ad
   tasks:
     - name: Set timezone to GMT Standard Time
       ansible.windows.win_timezone:
@@ -45,7 +47,7 @@
             
             # Hvis adapteren findes, sæt DNS-serverne
             if ($adapter) {
-                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.56", "{{ network_address }}.56")
+                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.201", "{{ network_address }}.202")
                 Write-Host "Successfully set DNS for adapter $($adapter.Name)"
             } else {
                 Write-Host "No active network adapter found to set DNS."

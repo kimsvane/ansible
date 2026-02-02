@@ -1,5 +1,5 @@
 ---
-# postgresql_install.yml - Updated to comply with Veeam KB4728 and KB4638
+# postgresql_install.yml - Updated for RHEL 9 Native + Veeam KB4728 & KB4638
 - name: Install and Configure PostgreSQL 15 + PgBouncer for Veeam VB365
   hosts: postgresql
   become: yes
@@ -48,22 +48,18 @@
         - data_disk.stat.exists
         - disk_uuid_result is defined
 
-    # PostgreSQL installation
-    - name: Install PostgreSQL repository
-      ansible.builtin.dnf:
-        name: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-{{ ansible_distribution_major_version }}-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
-        state: present
-        disable_gpg_check: yes
+    # --- PostgreSQL installation (RHEL Native Method) ---
+    - name: Enable PostgreSQL 15 module
+      ansible.builtin.shell: dnf -y module enable postgresql:15
+      register: module_enable
+      changed_when: "'Complete!' in module_enable.stdout"
 
-    - name: Disable built-in PostgreSQL module
-      ansible.builtin.command: dnf -qy module disable postgresql
-      changed_when: false
-
-    - name: Install PostgreSQL 15 and dependencies
+    - name: Install PostgreSQL and dependencies
       ansible.builtin.dnf:
         name:
-          - "postgresql{{ postgresql_version }}-server"
-          - "postgresql{{ postgresql_version }}-contrib"
+          - postgresql-server
+          - postgresql-contrib
+          - pgbouncer
           - python3-psycopg2
         state: present
 
@@ -78,92 +74,89 @@
 
     - name: Check if PostgreSQL is initialized
       ansible.builtin.stat:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/PG_VERSION"
+        path: "{{ pgsql_mount_point }}/data/PG_VERSION"
       register: pgdata
 
     - name: Initialize PostgreSQL with data checksums
-      ansible.builtin.command: "/usr/pgsql-{{ postgresql_version }}/bin/postgresql-{{ postgresql_version }}-setup initdb"
+      ansible.builtin.command: "postgresql-setup --initdb"
       when: not pgdata.stat.exists
       environment:
         PGSETUP_INITDB_OPTIONS: "--data-checksums"
 
-    # PostgreSQL Configuration - Per Veeam KB4728 requirements
+    # --- PostgreSQL Configuration (Veeam KB4728 requirements) ---
     - name: Configure PostgreSQL - listen_addresses
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?listen_addresses"
         line: "listen_addresses = '*'"
 
     - name: Configure PostgreSQL - port
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?port"
         line: "port = {{ postgresql_port }}"
 
-    - name: Configure PostgreSQL - max_connections (formula based)
+    - name: Configure PostgreSQL - max_connections
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?max_connections"
         line: "max_connections = {{ (pgbouncer_max_user_connections * 1.10) | int }}"
 
     - name: Configure PostgreSQL - shared_buffers
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?shared_buffers"
         line: "shared_buffers = 4GB"
 
     - name: Configure PostgreSQL - effective_cache_size
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?effective_cache_size"
         line: "effective_cache_size = 12GB"
 
     - name: Configure PostgreSQL - maintenance_work_mem
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?maintenance_work_mem"
         line: "maintenance_work_mem = 1GB"
 
     - name: Configure PostgreSQL - work_mem
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?work_mem"
         line: "work_mem = 16MB"
 
     - name: Configure PostgreSQL - wal_buffers
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?wal_buffers"
         line: "wal_buffers = 16MB"
 
     - name: Configure PostgreSQL - checkpoint_completion_target
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?checkpoint_completion_target"
         line: "checkpoint_completion_target = 0.9"
 
-    - name: Configure PostgreSQL - random_page_cost (for SSD)
+    - name: Configure PostgreSQL - random_page_cost
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?random_page_cost"
         line: "random_page_cost = 1.1"
 
     - name: Configure PostgreSQL - effective_io_concurrency
       ansible.builtin.lineinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/postgresql.conf"
+        path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?effective_io_concurrency"
         line: "effective_io_concurrency = 200"
 
-    # pg_hba.conf configuration per Veeam KB4728
-    - name: Configure pg_hba.conf for local connections (required for PgBouncer)
+    - name: Configure pg_hba.conf for local connections
       ansible.builtin.blockinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/pg_hba.conf"
+        path: "{{ pgsql_mount_point }}/data/pg_hba.conf"
         block: |
-          # Local connections for PgBouncer
           local   all             all                                     scram-sha-256
           host    all             all             127.0.0.1/32            scram-sha-256
           host    all             all             ::1/128                 scram-sha-256
-          # Allow postgres superuser from localhost with password
           host    all             postgres        127.0.0.1/32            scram-sha-256
           host    all             postgres        ::1/128                 scram-sha-256
         marker: "# {mark} LOCAL PGBOUNCER ACCESS"
@@ -171,9 +164,8 @@
 
     - name: Configure pg_hba.conf for remote Veeam access
       ansible.builtin.blockinfile:
-        path: "/var/lib/pgsql/{{ postgresql_version }}/data/pg_hba.conf"
+        path: "{{ pgsql_mount_point }}/data/pg_hba.conf"
         block: |
-          # Veeam VB365 Remote Access
           {% for network in allowed_networks %}
           host    all    all    {{ network }}    scram-sha-256
           {% endfor %}
@@ -181,7 +173,7 @@
 
     - name: Start and enable PostgreSQL
       ansible.builtin.systemd:
-        name: "postgresql-{{ postgresql_version }}"
+        name: "postgresql"
         state: started
         enabled: yes
 
@@ -196,18 +188,13 @@
         sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '{{ postgres_superuser_password }}';"
       no_log: true
 
-    # Part 1: Prepare PostgreSQL for PgBouncer (per KB4728)
-    - name: Create dedicated PgBouncer user in PostgreSQL
+    - name: Create dedicated PgBouncer user
       ansible.builtin.shell: |
-        sudo -u postgres psql -c "CREATE USER {{ pgbouncer_db_user }} WITH LOGIN;"
+        sudo -u postgres psql -c "CREATE USER {{ pgbouncer_db_user }} WITH LOGIN PASSWORD '{{ pgbouncer_db_password }}';"
       ignore_errors: yes
-
-    - name: Set PgBouncer user password
-      ansible.builtin.shell: |
-        sudo -u postgres psql -c "ALTER USER {{ pgbouncer_db_user }} WITH PASSWORD '{{ pgbouncer_db_password }}';"
       no_log: true
 
-    - name: Create user_search function for PgBouncer authentication
+    - name: Create user_search function for PgBouncer
       ansible.builtin.shell: |
         sudo -u postgres psql -d postgres -c "
         CREATE OR REPLACE FUNCTION user_search(uname TEXT)
@@ -219,33 +206,19 @@
       register: user_search_result
       changed_when: "'CREATE FUNCTION' in user_search_result.stdout"
 
-    - name: Grant execute on user_search to PgBouncer user
+    - name: Grant execute on user_search
       ansible.builtin.shell: |
         sudo -u postgres psql -d postgres -c "GRANT EXECUTE ON FUNCTION user_search(text) TO {{ pgbouncer_db_user }};"
 
-    # Veeam User Setup - Veeam will create the database itself
-    - name: Create Veeam admin user with full privileges
+    - name: Create Veeam admin user
       ansible.builtin.shell: |
         sudo -u postgres psql -c "CREATE USER {{ veeam_db_user }} WITH PASSWORD '{{ veeam_db_password }}';"
       no_log: true
       ignore_errors: yes
 
-    - name: Grant superuser privileges to Veeam user (required for database creation)
+    - name: Grant superuser privileges to Veeam user
       ansible.builtin.shell: |
         sudo -u postgres psql -c "ALTER USER {{ veeam_db_user }} WITH SUPERUSER CREATEROLE CREATEDB;"
-
-    - name: Open firewall for PostgreSQL
-      ansible.builtin.firewalld:
-        port: "{{ postgresql_port }}/tcp"
-        permanent: yes
-        state: enabled
-        immediate: yes
-
-    # Part 2: Install and Configure PgBouncer (per KB4728)
-    - name: Install PgBouncer
-      ansible.builtin.dnf:
-        name: pgbouncer
-        state: present
 
     - name: Create PgBouncer configuration directory
       ansible.builtin.file:
@@ -254,13 +227,6 @@
         owner: pgbouncer
         group: pgbouncer
         mode: '0750'
-
-    - name: Generate SCRAM-SHA-256 hash for PgBouncer userlist
-      ansible.builtin.shell: |
-        echo -n "{{ veeam_db_password }}{{ veeam_db_user }}" | openssl dgst -binary -sha256 | openssl base64
-      register: veeam_password_hash
-      no_log: true
-      changed_when: false
 
     - name: Create PgBouncer userlist.txt
       ansible.builtin.copy:
@@ -273,119 +239,35 @@
           "{{ veeam_db_user }}" "{{ veeam_db_password }}"
       no_log: true
 
-    - name: Configure PgBouncer ini file (per KB4728 specifications)
+    - name: Configure PgBouncer ini file
       ansible.builtin.copy:
         dest: /etc/pgbouncer/pgbouncer.ini
         owner: pgbouncer
         group: pgbouncer
         mode: '0640'
         content: |
-          ;;;
-          ;;; PgBouncer configuration for Veeam VB365
-          ;;; Configuration based on Veeam KB4728
-          ;;;
-
           [databases]
           postgres = host=127.0.0.1 port={{ postgresql_port }} dbname=postgres
           VeeamBackup365 = host=127.0.0.1 port={{ postgresql_port }} dbname=VeeamBackup365
           veeambackup365 = host=127.0.0.1 port={{ postgresql_port }} dbname=veeambackup365
+
           [pgbouncer]
-          ;;;
-          ;;; Administrative settings
-          ;;;
           logfile = /var/log/pgbouncer/pgbouncer.log
           pidfile = /run/pgbouncer/pgbouncer.pid
-
-          ;;;
-          ;;; Connection settings
-          ;;;
           listen_addr = *
           listen_port = 6432
           unix_socket_dir = /tmp
-
-          ;;;
-          ;;; Authentication settings (per KB4728)
-          ;;;
           auth_type = scram-sha-256
           auth_file = /etc/pgbouncer/userlist.txt
           auth_query = SELECT usename, passwd FROM user_search($1)
           auth_user = {{ pgbouncer_db_user }}
           auth_dbname = postgres
-          auth_hba_file = /etc/pgbouncer/pgbouncer_hba.conf
-
-          ;;;
-          ;;; Pooling settings (per KB4728)
-          ;;;
           pool_mode = transaction
           max_client_conn = {{ pgbouncer_max_client_conn }}
           default_pool_size = {{ pgbouncer_default_pool_size }}
-          min_pool_size = 0
-          reserve_pool_size = {{ pgbouncer_reserve_pool_size }}
-          reserve_pool_timeout = 5
-          max_db_connections = 0
           max_user_connections = {{ pgbouncer_max_user_connections }}
-
-          ;;;
-          ;;; Timeouts
-          ;;;
           server_reset_query = DISCARD ALL
-          server_reset_query_always = 0
-          server_check_delay = 15
-          server_check_query = select 1
-          server_lifetime = 3600
-          server_idle_timeout = 60
-          server_connect_timeout = 15
-          server_login_retry = 15
-          query_timeout = 0
-          query_wait_timeout = 55
-          client_idle_timeout = 0
-          client_login_timeout = 60
-          idle_transaction_timeout = 0
-
-          ;;;
-          ;;; Logging
-          ;;;
-          log_connections = 1
-          log_disconnections = 1
-          log_pooler_errors = 1
-          log_stats = 1
-          stats_period = 60
-
-          ;;;
-          ;;; Dangerous timeouts
-          ;;;
-          pkt_buf = 8192
-          max_packet_size = 2147483647
-          listen_backlog = 128
-          sbuf_loopcnt = 5
-
-    - name: Create pgbouncer_hba.conf (mirrors pg_hba.conf per KB4728)
-      ansible.builtin.copy:
-        dest: /etc/pgbouncer/pgbouncer_hba.conf
-        owner: pgbouncer
-        group: pgbouncer
-        mode: '0640'
-        content: |
-          # PgBouncer HBA configuration - mirrors PostgreSQL pg_hba.conf
-          # TYPE    DATABASE        USER            ADDRESS                 METHOD
-          
-          # Local connections
-          local     all             all                                     scram-sha-256
-          host      all             all             127.0.0.1/32            scram-sha-256
-          host      all             all             ::1/128                 scram-sha-256
-          
-          # Veeam VB365 Remote Access
-          {% for network in allowed_networks %}
-          host      all             all             {{ network }}           scram-sha-256
-          {% endfor %}
-
-    - name: Create PgBouncer log directory
-      ansible.builtin.file:
-        path: /var/log/pgbouncer
-        state: directory
-        owner: pgbouncer
-        group: pgbouncer
-        mode: '0755'
+          ignore_startup_parameters = extra_float_digits
 
     - name: Enable and start PgBouncer
       ansible.builtin.systemd:
@@ -393,22 +275,19 @@
         enabled: yes
         state: restarted
 
-    - name: Wait for PgBouncer to be ready
-      ansible.builtin.wait_for:
-        port: 6432
-        delay: 3
-        timeout: 30
-
-    - name: Open firewall for PgBouncer
+    - name: Open firewall
       ansible.builtin.firewalld:
-        port: 6432/tcp
+        port: "{{ item }}"
         permanent: yes
         state: enabled
         immediate: yes
+      loop:
+        - "{{ postgresql_port }}/tcp"
+        - "6432/tcp"
 
-    # Status checks
+    # --- STATUS CHECKS (Din originale summary logik) ---
     - name: Get PostgreSQL status
-      ansible.builtin.command: systemctl status postgresql-{{ postgresql_version }}
+      ansible.builtin.command: systemctl status postgresql
       register: pg_status
       changed_when: false
       ignore_errors: yes
@@ -437,36 +316,18 @@
       ansible.builtin.debug:
         msg:
           - "======================================================================="
-          - "PostgreSQL 15 + PgBouncer Installation Complete (Veeam KB4728 Compliant)"
+          - "PostgreSQL 15 + PgBouncer Installation Complete (RHEL Native)"
           - "======================================================================="
           - "PostgreSQL Configuration:"
-          - "  - Host: {{ ansible_default_ipv4.address }}"
           - "  - Port: {{ postgresql_port }}"
-          - "  - Admin User: {{ veeam_db_user }} (SUPERUSER with CREATEDB and CREATEROLE)"
-          - "  - Max Connections: {{ (pgbouncer_max_user_connections * 1.10) | int }}"
+          - "  - Admin User: {{ veeam_db_user }}"
           - "  - Status: {{ 'Running' if 'active (running)' in pg_status.stdout else 'Check Manually' }}"
           - "-----------------------------------------------------------------------"
           - "PgBouncer Configuration:"
           - "  - Port: 6432"
-          - "  - Pool Mode: transaction"
-          - "  - Max Client Connections: {{ pgbouncer_max_client_conn }}"
-          - "  - Default Pool Size: {{ pgbouncer_default_pool_size }}"
-          - "  - Max User Connections: {{ pgbouncer_max_user_connections }}"
-          - "  - Auth Method: scram-sha-256 with auth_query"
           - "  - Status: {{ 'Running' if 'active (running)' in pgbouncer_status.stdout else 'Check Manually' }}"
-          - "  - Connection Test: {{ 'SUCCESS' if pgbouncer_test.rc == 0 else 'FAILED - Check logs' }}"
+          - "  - Connection Test: {{ 'SUCCESS' if pgbouncer_test.rc == 0 else 'FAILED' }}"
           - "-----------------------------------------------------------------------"
           - "Disk Usage:"
           - "{{ disk_usage.stdout_lines | default(['N/A']) }}"
-          - "======================================================================="
-          - ""
-          - "IMPORTANT - Veeam VB365 Configuration:"
-          - "  1. Use PgBouncer port 6432 (NOT PostgreSQL port {{ postgresql_port }})"
-          - "  2. Server: {{ ansible_default_ipv4.address }}"
-          - "  3. Port: 6432"
-          - "  4. Database: postgres (Veeam will create VeeamBackup365 automatically)"
-          - "  5. Username: {{ veeam_db_user }}"
-          - "  6. Password: <your veeam_db_password>"
-          - "  7. Veeam will automatically create the VeeamBackup365 database"
-          - "  8. {{ veeam_db_user }} has SUPERUSER, CREATEDB, and CREATEROLE privileges"
           - "======================================================================="
