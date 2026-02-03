@@ -58,7 +58,7 @@
         dns_domain_name: "{{ domain }}"
         domain_admin_user: "{{ domain_user }}@{{ domain }}"
         domain_admin_password: "{{ domain_user_password }}"
-        domain_server: "{{ domain_controller }}"
+        #domain_server: "{{ domain_controller }}"
         state: domain
       register: domain_state
 
