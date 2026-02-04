@@ -41,6 +41,20 @@
         reboot: true
       register: domain_install
 
+    - name: Create NATS server record
+      ansible.windows.win_dns_record:
+        name: "{{ nats_hostname }}"
+        type: "A"
+        value: "{{ nats_ip }}"
+        zone: "{{ domain_name }}"
+
+    - name: Create PGSQL server record
+      ansible.windows.win_dns_record:
+        name: "{{ postgres_hostname }}"
+        type: "A"
+        value: "{{ postgres_ip }}"
+        zone: "{{ domain_name }}"
+
     # - name: Reboot after promotion
     #   ansible.windows.win_reboot:
     #     msg: "Rebooting after domain promotion"
