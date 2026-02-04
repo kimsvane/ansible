@@ -271,7 +271,7 @@
           pool_mode = transaction
           max_client_conn = {{ pgbouncer_max_client_conn }}
           default_pool_size = {{ pgbouncer_default_pool_size }}
-          max_user_connections = {{ pgbouncer_max_user_connections }}
+          max_user_connections = 1000
           server_reset_query = DISCARD ALL
           ignore_startup_parameters = extra_float_digits
 
