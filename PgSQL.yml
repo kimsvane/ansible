@@ -48,6 +48,12 @@
         - data_disk.stat.exists
         - disk_uuid_result is defined
 
+    - name: Install EPEL repository
+      ansible.builtin.dnf:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+        state: present
+        disable_gpg_check: yes
+
     # --- PostgreSQL installation (RHEL Native Method) ---
     - name: Enable PostgreSQL 15 module
       ansible.builtin.shell: dnf -y module enable postgresql:15
