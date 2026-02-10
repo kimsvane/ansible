@@ -23,7 +23,7 @@
       until: admin_pw_result is succeeded
       
     
-    # ---- LØSNING 6 STARTER HER ----
+
     - name: Create logging directory
       ansible.windows.win_file:
         path: C:\Logs
@@ -38,17 +38,29 @@
       debug:
         var: disk_space.stdout_lines
 
-    - name: Install AD-DS features with verbose logging
+    # - name: Install AD-DS features with verbose logging
+    #   ansible.windows.win_shell: |
+    #     Start-Transcript -Path "C:\Logs\feature-install.log" -Append
+    #     Install-WindowsFeature -Name AD-Domain-Services,RSAT-ADDS -IncludeManagementTools -Verbose
+    #     Stop-Transcript
+    #   async: 3600
+    #   poll: 30
+    #   register: install_result
+
+    - name: Install AD using DISM
       ansible.windows.win_shell: |
-        Start-Transcript -Path "C:\Logs\feature-install.log" -Append
-        Install-WindowsFeature -Name AD-Domain-Services,RSAT-ADDS -IncludeManagementTools -Verbose
+        Start-Transcript -Path "C:\Logs\dism-install.log" -Append
+        
+        # Install using DISM
+        dism.exe /online /enable-feature /featurename:DirectoryServices-DomainController /all /quiet /norestart
+        dism.exe /online /enable-feature /featurename:DirectoryServices-DomainController-Tools /all /quiet /norestart
+        
         Stop-Transcript
-      async: 3600
+      async: 1800
       poll: 30
-      register: install_result
 
     - name: Fetch installation log
-      ansible.windows.win_shell: Get-Content C:\Logs\feature-install.log -Tail 100
+      ansible.windows.win_shell: Get-Content C:\Logs\dism-install.log -Tail 100
       register: install_log
       when: install_result is defined
 
