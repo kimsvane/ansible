@@ -5,7 +5,12 @@
     vb365_iso_url: "https://download2.veeam.com/VBO/v8/VeeamBackupMicrosoft365_8.2.0.2202.iso"
     vb365_iso_filename: "VeeamBackupMicrosoft365_8.2.0.2202.iso"
     vb365_iso_path: "C:\\{{ vb365_iso_filename }}"
-    
+    temp_dir: 'C:\Temp'
+    sidecar_install_dir: 'C:\Program Files\Graylog\sidecar'
+    graylog_sidecar_version: "1.4.0"
+    graylog_sidecar_installer: "graylog_sidecar_installer_{{ graylog_sidecar_version }}_amd64.exe"
+    graylog_sidecar_url: "https://github.com/Graylog2/collector-sidecar/releases/download/{{ graylog_sidecar_version }}/{{ graylog_sidecar_installer }}"
+
     # Disse variabler forventes fra Terraform-genereret fil
     # postgres_host: "{{ postgres_host }}"
     # postgres_port: "{{ postgres_port | default(5432) }}"
@@ -208,6 +213,56 @@
       community.windows.win_disk_image:
         image_path: "{{ vb365_iso_path }}"
         state: absent
+
+
+    # - name: Ensure temp directory exists
+    #   ansible.windows.win_file:
+    #     path: "{{ temp_dir }}"
+    #     state: directory
+
+    # - name: Download Graylog Sidecar installer
+    #   ansible.windows.win_get_url:
+    #     url: "{{ graylog_sidecar_url }}"
+    #     dest: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
+    #     force: false
+
+    # - name: Install Graylog Sidecar (silent)
+    #   ansible.windows.win_package:
+    #     path: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
+    #     arguments:
+    #       - /S
+    #       - "-SERVERURL={{ graylog_server_url }}"
+    #       - "-APITOKEN={{ graylog_api_token }}"
+    #     state: present
+    #     creates_path: "{{ sidecar_install_dir }}\\graylog-sidecar.exe"
+
+    # - name: Install Graylog Sidecar as Windows service
+    #   ansible.windows.win_command:
+    #     cmd: '"{{ sidecar_install_dir }}\graylog-sidecar.exe" -service install'
+    #     creates: 'HKLM:\SYSTEM\CurrentControlSet\Services\graylog-sidecar'
+
+    # - name: Ensure Graylog Sidecar service is running and set to auto-start
+    #   ansible.windows.win_service:
+    #     name: graylog-sidecar
+    #     state: started
+    #     start_mode: auto
+
+    # - name: Allow Graylog Sidecar through Windows Firewall (outbound)
+    #   community.windows.win_firewall_rule:
+    #     name: "Graylog Sidecar Outbound"
+    #     localport: any
+    #     remoteport: any
+    #     direction: out
+    #     protocol: tcp
+    #     program: '{{ sidecar_install_dir }}\graylog-sidecar.exe'
+    #     action: allow
+    #     state: present
+    #     enabled: true
+
+    # - name: Cleanup installer
+    #   ansible.windows.win_file:
+    #     path: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
+    #     state: absent
 
 
     - name: Reboot server after installation
