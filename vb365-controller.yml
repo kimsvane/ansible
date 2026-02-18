@@ -182,6 +182,8 @@
         arguments: /qn /norestart ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1
         state: present
         product_id: "{DC88FC61-3BAA-4C5A-9867-65EDAB2A5B91}"
+      async: 3600
+      poll: 30
 
     # - name: Vent på PowerShell 7 er klar
     #   ansible.windows.win_shell: |
