@@ -183,13 +183,13 @@
         state: present
         product_id: "{DC88FC61-3BAA-4C5A-9867-65EDAB2A5B91}"
 
-    - name: Vent på PowerShell 7 er klar
-      ansible.windows.win_shell: |
-        & "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -NonInteractive -c '$PSVersionTable.PSVersion'
-      register: ps7_version
-      retries: 6
-      delay: 10
-      until: ps7_version.rc == 0
+    # - name: Vent på PowerShell 7 er klar
+    #   ansible.windows.win_shell: |
+    #     & "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -NonInteractive -c '$PSVersionTable.PSVersion'
+    #   register: ps7_version
+    #   retries: 6
+    #   delay: 10
+    #   until: ps7_version.rc == 0
 
     - name: Install VB365 v8.2 with external PostgreSQL and NATS
       ansible.windows.win_package:
