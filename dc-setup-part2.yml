@@ -14,8 +14,8 @@
   tasks:
     - name: Wait for WinRM to be fully ready (with retries)
       ansible.windows.win_ping:
-      retries: 20
-      delay: 15
+      retries: 30
+      delay: 30
       register: result
       until: result is succeeded
 

@@ -94,8 +94,8 @@
       
     - name: Reboot if required by feature installation
       ansible.windows.win_reboot:
-        reboot_timeout: 600
-        post_reboot_delay: 60
+        reboot_timeout: 1200
+        post_reboot_delay: 120
         test_command: 'whoami'
       when: reboot_check.stdout | trim == "true"
       register: reboot_result
@@ -104,7 +104,7 @@
       ansible.windows.win_wait_for:
         port: 5985
         delay: 15
-        timeout: 300
+        timeout: 600
         host: "{{ ansible_host }}"
       when: reboot_check.stdout | trim == "true"
       
