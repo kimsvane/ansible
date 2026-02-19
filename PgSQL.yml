@@ -7,7 +7,7 @@
   handlers:
     - name: restart postgresql
       ansible.builtin.systemd:
-        name: postgresql@15
+        name: postgresql-16
         state: restarted
         daemon_reload: yes
 
@@ -61,22 +61,22 @@
         - disk_uuid_result is defined
 
     # --- Installation ---
-    - name: Install EPEL repository
+    - name: Install PostgreSQL 16 repository
       ansible.builtin.dnf:
-        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+        name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
         state: present
         disable_gpg_check: yes
 
-    - name: Enable PostgreSQL 15 module
-      ansible.builtin.shell: dnf -y module enable postgresql:15
-      register: module_enable
-      changed_when: "'Complete!' in module_enable.stdout"
+    - name: Disable built-in PostgreSQL module
+      ansible.builtin.shell: dnf -y module disable postgresql
+      register: module_disable
+      changed_when: "'Complete!' in module_disable.stdout"
 
-    - name: Install PostgreSQL and dependencies
+    - name: Install PostgreSQL 16 and dependencies
       ansible.builtin.dnf:
         name:
-          - postgresql-server
-          - postgresql-contrib
+          - postgresql16-server
+          - postgresql16-contrib
           - pgbouncer
           - python3-psycopg2
         state: present
@@ -90,16 +90,15 @@
         mode: '0700'
       when: pgsql_data_disk is defined
 
-    # --- Fix: PGDATA via systemd override (løser journalctl-fejlen) ---
     - name: Create systemd override directory for PostgreSQL
       ansible.builtin.file:
-        path: /etc/systemd/system/postgresql@15.service.d
+        path: /etc/systemd/system/postgresql-16.service.d
         state: directory
         mode: '0755'
 
     - name: Set PGDATA i systemd override
       ansible.builtin.copy:
-        dest: /etc/systemd/system/postgresql@15.service.d/pgdata.conf
+        dest: /etc/systemd/system/postgresql-16.service.d/override.conf
         content: |
           [Service]
           Environment=PGDATA={{ pgsql_mount_point }}/data
@@ -116,7 +115,7 @@
       register: pgdata
 
     - name: Initialize PostgreSQL with data checksums
-      ansible.builtin.command: "postgresql-setup --initdb"
+      ansible.builtin.command: /usr/pgsql-16/bin/postgresql-16-setup initdb
       when: not pgdata.stat.exists
       environment:
         PGSETUP_INITDB_OPTIONS: "--data-checksums"
@@ -124,7 +123,7 @@
 
     - name: Start and enable PostgreSQL
       ansible.builtin.systemd:
-        name: "postgresql@15"
+        name: postgresql-16
         state: started
         enabled: yes
         daemon_reload: yes
@@ -325,27 +324,53 @@
         mode: '0640'
         content: |
           [databases]
-          postgres = host=127.0.0.1 port={{ postgresql_port }} dbname=postgres
-          VeeamBackup365 = host=127.0.0.1 port={{ postgresql_port }} dbname=VeeamBackup365
-          veeambackup365 = host=127.0.0.1 port={{ postgresql_port }} dbname=veeambackup365
+          * = host=/var/run/postgresql auth_user={{ pgbouncer_db_user }}
+          VeeamBackup365 = host=/var/run/postgresql auth_user={{ pgbouncer_db_user }} dbname=VeeamBackup365 pool_size=200
 
           [pgbouncer]
           logfile = /var/log/pgbouncer/pgbouncer.log
-          pidfile = /run/pgbouncer/pgbouncer.pid
+          pidfile = /var/run/pgbouncer/pgbouncer.pid
           listen_addr = *
           listen_port = 6432
-          unix_socket_dir = /tmp
-          auth_type = scram-sha-256
+          unix_socket_dir = /var/run/pgbouncer
+          unix_socket_mode = 0755
+          unix_socket_group = postgres
+          auth_type = hba
           auth_file = /etc/pgbouncer/userlist.txt
+          auth_hba_file = /etc/pgbouncer/pgbouncer_hba.conf
           auth_query = SELECT usename, passwd FROM user_search($1)
-          auth_user = {{ pgbouncer_db_user }}
           auth_dbname = postgres
+          admin_users = {{ pgbouncer_db_user }}, postgres, root
+          stats_users = {{ pgbouncer_db_user }}, postgres, root
           pool_mode = transaction
+          ignore_startup_parameters = extra_float_digits,application_name
           max_client_conn = {{ pgbouncer_max_client_conn }}
-          default_pool_size = {{ pgbouncer_default_pool_size }}
           max_user_connections = {{ pgbouncer_max_user_connections }}
-          server_reset_query = DISCARD ALL
-          ignore_startup_parameters = extra_float_digits
+          default_pool_size = {{ pgbouncer_default_pool_size }}
+          log_connections = 0
+          log_disconnections = 0
+          stats_period = 180
+          server_idle_timeout = 60
+          server_connect_timeout = 120
+          query_wait_timeout = 55
+          tcp_defer_accept = 45
+      notify: restart pgbouncer
+
+
+    - name: Create pgbouncer_hba.conf
+      ansible.builtin.copy:
+        dest: /etc/pgbouncer/pgbouncer_hba.conf
+        owner: pgbouncer
+        group: pgbouncer
+        mode: '0640'
+        content: |
+          # TYPE  DATABASE  USER  ADDRESS           METHOD
+          local   all       all                     peer
+          host    all       all   127.0.0.1/32      scram-sha-256
+          host    all       all   ::1/128            scram-sha-256
+          {% for network in allowed_networks %}
+          host    all       all   {{ network }}      scram-sha-256
+          {% endfor %}
       notify: restart pgbouncer
 
     - name: Enable and start PgBouncer
@@ -366,7 +391,7 @@
 
     # --- Status checks ---
     - name: Get PostgreSQL status
-      ansible.builtin.command: systemctl status postgresql@15
+      ansible.builtin.command: systemctl status postgresql-16
       register: pg_status
       changed_when: false
       ignore_errors: yes
