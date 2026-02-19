@@ -17,6 +17,20 @@
         state: restarted
 
   tasks:
+
+
+
+    - name: Update all system packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+      register: system_update
+
+    - name: Reboot if kernel was updated
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      when: system_update.changed
+
     # --- Disk og mount ---
     - name: Check if data disk exists
       ansible.builtin.stat:
@@ -59,12 +73,6 @@
         - pgsql_data_disk is defined
         - data_disk.stat.exists
         - disk_uuid_result is defined
-
-    - name: Update system packages
-      ansible.builtin.dnf:
-        name: "*"
-        state: latest
-      before: Install PostgreSQL 16 repository
 
     # --- Installation ---
     - name: Install PostgreSQL 16 repository
