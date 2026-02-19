@@ -103,8 +103,8 @@
     - name: Wait for system to fully stabilize after reboot
       ansible.windows.win_wait_for:
         port: 5985
-        delay: 15
-        timeout: 600
+        delay: 30
+        timeout: 1200
         host: "{{ ansible_host }}"
       when: reboot_check.stdout | trim == "true"
       
