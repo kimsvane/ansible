@@ -60,6 +60,12 @@
         - data_disk.stat.exists
         - disk_uuid_result is defined
 
+    - name: Update system packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+      before: Install PostgreSQL 16 repository
+
     # --- Installation ---
     - name: Install PostgreSQL 16 repository
       ansible.builtin.dnf:
