@@ -1,19 +1,23 @@
 ---
-# postgresql_install.yml - Updated for RHEL 9 Native + Veeam KB4728 & KB4638
 - name: Install and Configure PostgreSQL 15 + PgBouncer for Veeam VB365
   hosts: postgresql
   become: yes
   gather_facts: yes
-  
 
   handlers:
-    - name: reload systemd and restart postgresql
+    - name: restart postgresql
       ansible.builtin.systemd:
         name: postgresql@15
         state: restarted
         daemon_reload: yes
 
+    - name: restart pgbouncer
+      ansible.builtin.systemd:
+        name: pgbouncer
+        state: restarted
+
   tasks:
+    # --- Disk og mount ---
     - name: Check if data disk exists
       ansible.builtin.stat:
         path: "{{ pgsql_data_disk }}"
@@ -25,7 +29,7 @@
         fstype: xfs
         dev: "{{ pgsql_data_disk }}"
         opts: -n ftype=1
-      when: 
+      when:
         - pgsql_data_disk is defined
         - data_disk.stat.exists
 
@@ -33,10 +37,10 @@
       ansible.builtin.command: "blkid -s UUID -o value {{ pgsql_data_disk }}"
       register: disk_uuid_result
       changed_when: false
-      when: 
+      when:
         - pgsql_data_disk is defined
         - data_disk.stat.exists
-        
+
     - name: Create PostgreSQL mount point
       ansible.builtin.file:
         path: "{{ pgsql_mount_point }}"
@@ -47,22 +51,22 @@
     - name: Mount data disk using UUID
       ansible.posix.mount:
         path: "{{ pgsql_mount_point }}"
-        src: "UUID={{ disk_uuid_result.stdout }}" 
+        src: "UUID={{ disk_uuid_result.stdout }}"
         fstype: xfs
         opts: defaults,noatime
         state: mounted
-      when: 
+      when:
         - pgsql_data_disk is defined
         - data_disk.stat.exists
         - disk_uuid_result is defined
 
+    # --- Installation ---
     - name: Install EPEL repository
       ansible.builtin.dnf:
         name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
         state: present
         disable_gpg_check: yes
 
-    # --- PostgreSQL installation (RHEL Native Method) ---
     - name: Enable PostgreSQL 15 module
       ansible.builtin.shell: dnf -y module enable postgresql:15
       register: module_enable
@@ -85,6 +89,8 @@
         group: postgres
         mode: '0700'
       when: pgsql_data_disk is defined
+
+    # --- Fix: PGDATA via systemd override (løser journalctl-fejlen) ---
     - name: Create systemd override directory for PostgreSQL
       ansible.builtin.file:
         path: /etc/systemd/system/postgresql@15.service.d
@@ -97,8 +103,13 @@
         content: |
           [Service]
           Environment=PGDATA={{ pgsql_mount_point }}/data
-      notify: reload systemd and restart postgresql
+      notify: restart postgresql
 
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    # --- Init og start ---
     - name: Check if PostgreSQL is initialized
       ansible.builtin.stat:
         path: "{{ pgsql_mount_point }}/data/PG_VERSION"
@@ -110,107 +121,113 @@
       environment:
         PGSETUP_INITDB_OPTIONS: "--data-checksums"
         PGDATA: "{{ pgsql_mount_point }}/data"
-    
+
     - name: Start and enable PostgreSQL
       ansible.builtin.systemd:
-        name: "postgresql@15"    # <-- ret dette fra 'postgresql'
+        name: "postgresql@15"
         state: started
         enabled: yes
         daemon_reload: yes
 
-    # --- PostgreSQL Configuration (Veeam KB4728 requirements) ---
+    # --- PostgreSQL konfiguration ---
     - name: Configure PostgreSQL - listen_addresses
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?listen_addresses"
         line: "listen_addresses = '*'"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - port
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?port"
         line: "port = {{ postgresql_port }}"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - max_connections
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?max_connections"
         line: "max_connections = {{ (pgbouncer_max_user_connections * 1.10) | int }}"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - shared_buffers
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?shared_buffers"
         line: "shared_buffers = 4GB"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - effective_cache_size
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?effective_cache_size"
         line: "effective_cache_size = 12GB"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - maintenance_work_mem
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?maintenance_work_mem"
         line: "maintenance_work_mem = 1GB"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - work_mem
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?work_mem"
         line: "work_mem = 16MB"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - wal_buffers
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?wal_buffers"
         line: "wal_buffers = 16MB"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - checkpoint_completion_target
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?checkpoint_completion_target"
         line: "checkpoint_completion_target = 0.9"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - random_page_cost
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?random_page_cost"
         line: "random_page_cost = 1.1"
+      notify: restart postgresql
 
     - name: Configure PostgreSQL - effective_io_concurrency
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?effective_io_concurrency"
         line: "effective_io_concurrency = 200"
+      notify: restart postgresql
 
-    - name: Configure pg_hba.conf for local connections
-      ansible.builtin.blockinfile:
-        path: "{{ pgsql_mount_point }}/data/pg_hba.conf"
-        block: |
+    - name: Configure pg_hba.conf - fjern default indhold
+      ansible.builtin.copy:
+        dest: "{{ pgsql_mount_point }}/data/pg_hba.conf"
+        content: |
+          # TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+          # {mark} LOCAL PGBOUNCER ACCESS
           local   all             all                                     scram-sha-256
           host    all             all             127.0.0.1/32            scram-sha-256
           host    all             all             ::1/128                 scram-sha-256
           host    all             postgres        127.0.0.1/32            scram-sha-256
           host    all             postgres        ::1/128                 scram-sha-256
-        marker: "# {mark} LOCAL PGBOUNCER ACCESS"
-        insertbefore: "^# TYPE"
 
-    - name: Configure pg_hba.conf for remote Veeam access
-      ansible.builtin.blockinfile:
-        path: "{{ pgsql_mount_point }}/data/pg_hba.conf"
-        block: |
+          # {mark} VEEAM VB365 REMOTE
           {% for network in allowed_networks %}
           host    all    all    {{ network }}    scram-sha-256
           {% endfor %}
-        marker: "# {mark} VEEAM VB365 REMOTE"
-
-    - name: Start and enable PostgreSQL
-      ansible.builtin.systemd:
-        name: "postgresql"
-        state: started
-        enabled: yes
+        owner: postgres
+        group: postgres
+        mode: '0600'
+      notify: restart postgresql
 
     - name: Wait for PostgreSQL to be ready
       ansible.builtin.wait_for:
@@ -218,15 +235,22 @@
         delay: 5
         timeout: 60
 
+    # --- Brugere og database ---
     - name: Set postgres superuser password
       ansible.builtin.shell: |
         sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '{{ postgres_superuser_password }}';"
       no_log: true
 
+    - name: Check if PgBouncer user exists
+      ansible.builtin.shell: |
+        sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='{{ pgbouncer_db_user }}'"
+      register: pgbouncer_user_exists
+      changed_when: false
+
     - name: Create dedicated PgBouncer user
       ansible.builtin.shell: |
         sudo -u postgres psql -c "CREATE USER {{ pgbouncer_db_user }} WITH LOGIN PASSWORD '{{ pgbouncer_db_password }}';"
-      ignore_errors: yes
+      when: pgbouncer_user_exists.stdout != "1"
       no_log: true
 
     - name: Create user_search function for PgBouncer
@@ -245,16 +269,34 @@
       ansible.builtin.shell: |
         sudo -u postgres psql -d postgres -c "GRANT EXECUTE ON FUNCTION user_search(text) TO {{ pgbouncer_db_user }};"
 
+    - name: Check if Veeam user exists
+      ansible.builtin.shell: |
+        sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='{{ veeam_db_user }}'"
+      register: veeam_user_exists
+      changed_when: false
+
     - name: Create Veeam admin user
       ansible.builtin.shell: |
         sudo -u postgres psql -c "CREATE USER {{ veeam_db_user }} WITH PASSWORD '{{ veeam_db_password }}';"
+      when: veeam_user_exists.stdout != "1"
       no_log: true
-      ignore_errors: yes
 
     - name: Grant superuser privileges to Veeam user
       ansible.builtin.shell: |
         sudo -u postgres psql -c "ALTER USER {{ veeam_db_user }} WITH SUPERUSER CREATEROLE CREATEDB;"
 
+    - name: Create VeeamBackup365 database
+      ansible.builtin.shell: |
+        sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='VeeamBackup365'"
+      register: veeam_db_exists
+      changed_when: false
+
+    - name: Create VeeamBackup365 database
+      ansible.builtin.shell: |
+        sudo -u postgres psql -c "CREATE DATABASE \"VeeamBackup365\" OWNER {{ veeam_db_user }};"
+      when: veeam_db_exists.stdout != "1"
+
+    # --- PgBouncer ---
     - name: Create PgBouncer configuration directory
       ansible.builtin.file:
         path: /etc/pgbouncer
@@ -273,6 +315,7 @@
           "{{ pgbouncer_db_user }}" "{{ pgbouncer_db_password }}"
           "{{ veeam_db_user }}" "{{ veeam_db_password }}"
       no_log: true
+      notify: restart pgbouncer
 
     - name: Configure PgBouncer ini file
       ansible.builtin.copy:
@@ -300,15 +343,16 @@
           pool_mode = transaction
           max_client_conn = {{ pgbouncer_max_client_conn }}
           default_pool_size = {{ pgbouncer_default_pool_size }}
-          max_user_connections = 1000
+          max_user_connections = {{ pgbouncer_max_user_connections }}
           server_reset_query = DISCARD ALL
           ignore_startup_parameters = extra_float_digits
+      notify: restart pgbouncer
 
     - name: Enable and start PgBouncer
       ansible.builtin.systemd:
         name: pgbouncer
         enabled: yes
-        state: restarted
+        state: started
 
     - name: Open firewall
       ansible.builtin.firewalld:
@@ -320,9 +364,9 @@
         - "{{ postgresql_port }}/tcp"
         - "6432/tcp"
 
-    # --- STATUS CHECKS (Din originale summary logik) ---
+    # --- Status checks ---
     - name: Get PostgreSQL status
-      ansible.builtin.command: systemctl status postgresql
+      ansible.builtin.command: systemctl status postgresql@15
       register: pg_status
       changed_when: false
       ignore_errors: yes
