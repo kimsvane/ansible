@@ -20,16 +20,16 @@
 
 
 
-    - name: Update all system packages
-      ansible.builtin.dnf:
-        name: "*"
-        state: latest
-      register: system_update
+    # - name: Update all system packages
+    #   ansible.builtin.dnf:
+    #     name: "*"
+    #     state: latest
+    #   register: system_update
 
-    - name: Reboot if kernel was updated
-      ansible.builtin.reboot:
-        reboot_timeout: 300
-      when: system_update.changed
+    # - name: Reboot if kernel was updated
+    #   ansible.builtin.reboot:
+    #     reboot_timeout: 300
+    #   when: system_update.changed
 
     # --- Disk og mount ---
     - name: Check if data disk exists
@@ -327,7 +327,7 @@
         group: pgbouncer
         mode: '0600'
       changed_when: false
-      
+
     - name: Create PgBouncer userlist.txt
       ansible.builtin.copy:
         dest: /etc/pgbouncer/userlist.txt
