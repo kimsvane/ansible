@@ -209,19 +209,31 @@
 
     - name: Install .NET Runtime
       ansible.windows.win_package:
-        path: "{{ redistr_path }}\\dotnet-runtime-*.exe"
+        path: "{{ dotnet_runtime_file.files[0].path }}"
         arguments: "/quiet /norestart"
         state: present
+
+    - name: Find ASP.NET Runtime installer
+      ansible.windows.win_find:
+        paths: "{{ redistr_path }}"
+        patterns: "aspnetcore-runtime-*-win-x64.exe"
+      register: aspnet_runtime_file
 
     - name: Install ASP.NET Runtime
       ansible.windows.win_package:
-        path: "{{ redistr_path }}\\aspnetcore-runtime-*.exe"
+        path: "{{ aspnet_runtime_file.files[0].path }}"
         arguments: "/quiet /norestart"
         state: present
 
-    - name: Install Windows Desktop Runtime
+    - name: Find Desktop Runtime installer
+      ansible.windows.win_find:
+        paths: "{{ redistr_path }}"
+        patterns: "windowsdesktop-runtime-*-win-x64.exe"
+      register: desktop_runtime_file
+
+    - name: Install Desktop Runtime
       ansible.windows.win_package:
-        path: "{{ redistr_path }}\\windowsdesktop-runtime-*.exe"
+        path: "{{ desktop_runtime_file.files[0].path }}"
         arguments: "/quiet /norestart"
         state: present
 
@@ -233,9 +245,15 @@
         state: present
 
 
+    - name: Find PowerShell installer
+      ansible.windows.win_find:
+        paths: "{{ redistr_path }}"
+        patterns: "PowerShell-*-win-x64.msi"
+      register: ps7_file
+
     - name: Install PowerShell 7
       ansible.windows.win_package:
-        path: "{{ redistr_path }}\\PowerShell-*.msi"
+        path: "{{ ps7_file.files[0].path }}"
         arguments: "/qn ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1"
         state: present
 
@@ -245,7 +263,7 @@
         sleep: 10
         timeout: 600
 
-        
+
     - name: Check if reboot required after prereqs
       ansible.windows.win_shell: |
         if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") { "true" } else { "false" }
