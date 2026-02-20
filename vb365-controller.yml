@@ -165,72 +165,8 @@
         Test-NetConnection -ComputerName {{ nats.host }} -Port {{ nats.port | default(4222) }}
       register: nats_check
 
-    - name: Install Chocolatey via raw
-      ansible.windows.win_powershell:
-        script: |
-          Set-ExecutionPolicy Bypass -Scope Process -Force
-          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-          iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-      become: true
-      become_method: runas
-      become_user: SYSTEM
-      register: choco_install
-      args:
-        creates: C:\ProgramData\chocolatey\bin\choco.exe
-    
-    - name: Restart WInRM after Chocolatey installation
-      ansible.windows.win_shell: Restart-Service WinRM -Force
-      async: 1
-      poll: 0
-      ignore_errors: true
+##################################################
 
-    - name: Wait for WinRM to be fully ready after restart
-      ansible.builtin.wait_for:
-        host: "{{ inventory_hostname }}"
-        port: 5985
-        delay: 15
-        timeout: 120
-      delegate_to: localhost
-
-    - name: Install PowerShell 7
-      chocolatey.chocolatey.win_chocolatey:
-        name: powershell-core
-        version: '7.4.6'
-        state: present
-        install_args: 'ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1'
-        async: 1800
-        poll: 0
-    - name: Wait for host after PS7 install
-      ansible.builtin.wait_for_connection:
-        delay: 20
-        sleep: 10
-        timeout: 600
-    - name: Verify PowerShell 7 exists
-      ansible.windows.win_shell: |
-        if (Test-Path "C:\Program Files\PowerShell\7\pwsh.exe") {
-          "installed"
-        } else {
-          "missing"
-        }
-      register: ps7_check
-      until: ps7_check.stdout | trim == "installed"
-      retries: 20
-      delay: 15
-
-    # - name: Verificer PowerShell 7 er klar
-    #   ansible.windows.win_shell: |
-    #     & "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -NonInteractive -c '$PSVersionTable.PSVersion'
-    #   register: ps7_version
-    #   retries: 6
-    #   delay: 10
-    #   until: ps7_version.rc == 0
-    #   failed_when: ps7_version.rc != 0
-
-    - name: Install ASP.NET Core 8.0 Runtime
-      chocolatey.chocolatey.win_chocolatey:
-        name: dotnet-aspnetruntime
-        version: '8.0.0'
-        state: present
 
     - name: Check if reboot is required
       ansible.windows.win_shell: |
@@ -266,6 +202,59 @@
         image_path: "{{ vb365_iso_path }}"
         state: present
       register: disk_image_out
+
+    - name: Set redistributables path
+      ansible.builtin.set_fact:
+        redistr_path: "{{ disk_image_out.mount_paths[0] }}Redistr"
+
+    - name: Install .NET Runtime
+      ansible.windows.win_package:
+        path: "{{ redistr_path }}\\dotnet-runtime-*.exe"
+        arguments: "/quiet /norestart"
+        state: present
+
+    - name: Install ASP.NET Runtime
+      ansible.windows.win_package:
+        path: "{{ redistr_path }}\\aspnetcore-runtime-*.exe"
+        arguments: "/quiet /norestart"
+        state: present
+
+    - name: Install Windows Desktop Runtime
+      ansible.windows.win_package:
+        path: "{{ redistr_path }}\\windowsdesktop-runtime-*.exe"
+        arguments: "/quiet /norestart"
+        state: present
+
+
+    - name: Install VC++ runtime
+      ansible.windows.win_package:
+        path: "{{ redistr_path }}\\VC_redist.x64.exe"
+        arguments: "/quiet /norestart"
+        state: present
+
+
+    - name: Install PowerShell 7
+      ansible.windows.win_package:
+        path: "{{ redistr_path }}\\PowerShell-*.msi"
+        arguments: "/qn ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1"
+        state: present
+
+    - name: Wait for host after prereqs
+      ansible.builtin.wait_for_connection:
+        delay: 15
+        sleep: 10
+        timeout: 600
+
+        
+    - name: Check if reboot required after prereqs
+      ansible.windows.win_shell: |
+        if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") { "true" } else { "false" }
+      register: prereq_reboot
+
+    - name: Reboot after prereqs if needed
+      ansible.windows.win_reboot:
+        reboot_timeout: 1200
+      when: prereq_reboot.stdout | trim == "true"
 
 
     - name: Install VB365 v8.2 with external PostgreSQL and NATS
