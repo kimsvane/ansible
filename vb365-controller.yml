@@ -177,6 +177,20 @@
       register: choco_install
       args:
         creates: C:\ProgramData\chocolatey\bin\choco.exe
+    
+    - name: Restart WInRM after Chocolatey installation
+      ansible.windows.win_shell: Restart-Service WinRM -Force
+      async: 1
+      poll: 0
+      ignore_errors: true
+
+    - name: Wait for WinRM to be fully ready after restart
+      ansible.builtin.wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 5985
+        delay: 15
+        timeout: 120
+      delegate_to: localhost
 
     - name: Install PowerShell 7
       chocolatey.chocolatey.win_chocolatey:
