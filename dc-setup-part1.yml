@@ -100,13 +100,32 @@
       when: reboot_check.stdout | trim == "true"
       register: reboot_result
       
-    - name: Wait for system to fully stabilize after reboot
-      ansible.windows.win_wait_for:
-        port: 5985
+    - name: Wait for host to come back after reboot
+      ansible.builtin.wait_for_connection:
         delay: 30
+        sleep: 10
         timeout: 1200
-        host: "{{ ansible_host }}"
       when: reboot_check.stdout | trim == "true"
+    - name: Wait for Netlogon to be running
+      ansible.windows.win_service:
+          name: Netlogon
+      register: netlogon_status
+      until: netlogon_status.state == "running"
+      retries: 30
+      delay: 10
+
+    - name: Wait for AD to respond
+      ansible.windows.win_shell: |
+        try {
+          Get-ADDomain | Out-Null
+          Write-Output "ready"
+        } catch {
+          Write-Output "notready"
+        }
+      register: ad_ready
+      until: ad_ready.stdout | trim == "ready"
+      retries: 30
+      delay: 10
       
     # - name: Verify AD DS feature is installed
     #   ansible.windows.win_shell: |
