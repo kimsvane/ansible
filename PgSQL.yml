@@ -319,7 +319,15 @@
         owner: pgbouncer
         group: pgbouncer
         mode: '0750'
-
+    - name: Ensure userlist.txt eksisterer
+      ansible.builtin.file:
+        path: /etc/pgbouncer/userlist.txt
+        state: touch
+        owner: pgbouncer
+        group: pgbouncer
+        mode: '0600'
+      changed_when: false
+      
     - name: Create PgBouncer userlist.txt
       ansible.builtin.copy:
         dest: /etc/pgbouncer/userlist.txt
@@ -331,6 +339,12 @@
           "{{ veeam_db_user }}" "{{ veeam_db_password }}"
       no_log: true
       notify: restart pgbouncer
+    - name: Fix pgbouncer.ini ownership så Ansible kan overskrive
+      ansible.builtin.file:
+        path: /etc/pgbouncer/pgbouncer.ini
+        owner: pgbouncer
+        group: pgbouncer
+        mode: '0640'
 
     - name: Configure PgBouncer ini file
       ansible.builtin.copy:
