@@ -220,26 +220,27 @@
         line: "effective_io_concurrency = 200"
       notify: restart postgresql
 
-    - name: Configure pg_hba.conf - fjern default indhold
+    - name: Configure pg_hba.conf
       ansible.builtin.copy:
         dest: "{{ pgsql_mount_point }}/data/pg_hba.conf"
-        content: |
-          # TYPE  DATABASE        USER            ADDRESS                 METHOD
-
-          # {mark} LOCAL PGBOUNCER ACCESS
-          local   all             all                                     scram-sha-256
-          host    all             all             127.0.0.1/32            scram-sha-256
-          host    all             all             ::1/128                 scram-sha-256
-          host    all             postgres        127.0.0.1/32            scram-sha-256
-          host    all             postgres        ::1/128                 scram-sha-256
-
-          # {mark} VEEAM VB365 REMOTE
-          {% for network in allowed_networks %}
-          host    all    all    {{ network }}    scram-sha-256
-          {% endfor %}
         owner: postgres
         group: postgres
         mode: '0600'
+        content: |
+          # TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+          host    all    {{ veeam_db_user }}    0.0.0.0/0    scram-sha-256
+          host    all    {{ veeam_db_user }}    ::/0         scram-sha-256
+          host    all    all                    0.0.0.0/0    md5
+          local   all    postgres               trust
+          {% for extra_user in pgbouncer_extra_users | default([]) %}
+          host    all    {{ extra_user }}        0.0.0.0/0    md5
+          {% endfor %}
+
+          ###### PGBouncer additional config
+          local    all    all              scram-sha-256
+          host     all    all    127.0.0.1/32    scram-sha-256
+          host     all    all    ::1/128         scram-sha-256
       notify: restart postgresql
 
     - name: Wait for PostgreSQL to be ready
@@ -378,14 +379,20 @@
         group: pgbouncer
         mode: '0640'
         content: |
-          # TYPE  DATABASE  USER  ADDRESS           METHOD
-          local   all       all                     peer
-          host    all       all   127.0.0.1/32      scram-sha-256
-          host    all       all   ::1/128            scram-sha-256
-          {% for network in allowed_networks %}
-          host    all       all   {{ network }}      scram-sha-256
+          host    all    {{ veeam_db_user }}    0.0.0.0/0    scram-sha-256
+          host    all    {{ veeam_db_user }}    ::/0         scram-sha-256
+          host    all    all                    0.0.0.0/0    md5
+          local   all    postgres               trust
+          {% for extra_user in pgbouncer_extra_users | default([]) %}
+          host    all    {{ extra_user }}        0.0.0.0/0    md5
           {% endfor %}
+
+          ###### PGBouncer additional config
+          local    all    all              scram-sha-256
+          host     all    all    127.0.0.1/32    scram-sha-256
+          host     all    all    ::1/128         scram-sha-256
       notify: restart pgbouncer
+
 
     - name: Enable and start PgBouncer
       ansible.builtin.systemd:
