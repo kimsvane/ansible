@@ -198,15 +198,33 @@
         version: '7.4.6'
         state: present
         install_args: 'ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1'
-
-    - name: Verificer PowerShell 7 er klar
+        async: 1800
+        poll: 0
+    - name: Wait for host after PS7 install
+      ansible.builtin.wait_for_connection:
+        delay: 20
+        sleep: 10
+        timeout: 600
+    - name: Verify PowerShell 7 exists
       ansible.windows.win_shell: |
-        & "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -NonInteractive -c '$PSVersionTable.PSVersion'
-      register: ps7_version
-      retries: 6
-      delay: 10
-      until: ps7_version.rc == 0
-      failed_when: ps7_version.rc != 0
+        if (Test-Path "C:\Program Files\PowerShell\7\pwsh.exe") {
+          "installed"
+        } else {
+          "missing"
+        }
+      register: ps7_check
+      until: ps7_check.stdout | trim == "installed"
+      retries: 20
+      delay: 15
+
+    # - name: Verificer PowerShell 7 er klar
+    #   ansible.windows.win_shell: |
+    #     & "C:\Program Files\PowerShell\7\pwsh.exe" -NoProfile -NonInteractive -c '$PSVersionTable.PSVersion'
+    #   register: ps7_version
+    #   retries: 6
+    #   delay: 10
+    #   until: ps7_version.rc == 0
+    #   failed_when: ps7_version.rc != 0
 
     - name: Install ASP.NET Core 8.0 Runtime
       chocolatey.chocolatey.win_chocolatey:
