@@ -89,11 +89,12 @@
     - name: Install PostgreSQL 16 and dependencies
       ansible.builtin.dnf:
         name:
-          - postgresql16-server
-          - postgresql16-contrib
+          - postgresql16-server-16.6
+          - postgresql16-contrib-16.6
           - pgbouncer
           - python3-psycopg2
         state: present
+        disable_gpg_check: yes
 
     - name: Set correct ownership on mount point
       ansible.builtin.file:
