@@ -203,59 +203,47 @@
         state: present
       register: disk_image_out
 
-    - name: Set redistributables path
-      ansible.builtin.set_fact:
-        redistr_path: "{{ disk_image_out.mount_paths[0] }}Redistr"
-
     - name: Install .NET Runtime
       ansible.windows.win_package:
-        path: "{{ dotnet_runtime_file.files[0].path }}"
-        arguments: "/quiet /norestart"
+        path: "{{ redistr_path }}\\dotnet-runtime-8.0.17-win-x64.exe"
+        arguments: "/install /quiet /norestart"
         state: present
-
-    - name: Find ASP.NET Runtime installer
-      ansible.windows.win_find:
-        paths: "{{ redistr_path }}"
-        patterns: "aspnetcore-runtime-*-win-x64.exe"
-      register: aspnet_runtime_file
+      async: 1800
+      poll: 30
 
     - name: Install ASP.NET Runtime
       ansible.windows.win_package:
-        path: "{{ aspnet_runtime_file.files[0].path }}"
+        path: "{{ redistr_path }}\\aspnetcore-runtime-8.0.17-win-x64.exe"
         arguments: "/quiet /norestart"
         state: present
-
-    - name: Find Desktop Runtime installer
-      ansible.windows.win_find:
-        paths: "{{ redistr_path }}"
-        patterns: "windowsdesktop-runtime-*-win-x64.exe"
-      register: desktop_runtime_file
+      async: 1800
+      poll: 30
 
     - name: Install Desktop Runtime
       ansible.windows.win_package:
-        path: "{{ desktop_runtime_file.files[0].path }}"
+        path: "{{ redistr_path }}\\windowsdesktop-runtime-8.0.17-win-x64.exe"
         arguments: "/quiet /norestart"
         state: present
+      async: 1800
+      poll: 30
 
 
-    - name: Install VC++ runtime
+    - name: Install VC++ Runtime
       ansible.windows.win_package:
         path: "{{ redistr_path }}\\VC_redist.x64.exe"
         arguments: "/quiet /norestart"
         state: present
+      async: 1800
+      poll: 30
 
-
-    - name: Find PowerShell installer
-      ansible.windows.win_find:
-        paths: "{{ redistr_path }}"
-        patterns: "PowerShell-*-win-x64.msi"
-      register: ps7_file
 
     - name: Install PowerShell 7
       ansible.windows.win_package:
-        path: "{{ ps7_file.files[0].path }}"
+        path: "{{ redistr_path }}\\PowerShell-7.4.2-win-x64.msi"
         arguments: "/qn ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1"
         state: present
+      async: 1800
+      poll: 30
 
     - name: Wait for host after prereqs
       ansible.builtin.wait_for_connection:
