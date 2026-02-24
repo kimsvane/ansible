@@ -106,13 +106,13 @@
         sleep: 10
         timeout: 1200
       when: reboot_check.stdout | trim == "true"
-    - name: Wait for Netlogon to be running
-      ansible.windows.win_service:
-          name: Netlogon
-      register: netlogon_status
-      until: netlogon_status.state == "running"
-      retries: 30
-      delay: 10
+    # - name: Wait for Netlogon to be running
+    #   ansible.windows.win_service:
+    #       name: Netlogon
+    #   register: netlogon_status
+    #   until: netlogon_status.state == "running"
+    #   retries: 30
+    #   delay: 10
 
     # - name: Wait for AD to respond
     #   ansible.windows.win_shell: |
