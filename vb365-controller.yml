@@ -232,13 +232,21 @@
       poll: 30
 
 
+    - name: Check VC++ Runtime
+      ansible.windows.win_reg_stat:
+        path: HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64
+        name: Installed
+      register: vcredist_installed
+
+
     - name: Install VC++ Runtime
       ansible.windows.win_package:
         path: "{{ redistr_path }}\\VC_redist.x64.exe"
-        arguments: "/quiet /norestart"
+        arguments: /quiet /norestart
         state: present
       async: 1800
       poll: 30
+      when: vcredist_installed.value != 1
 
 
     - name: Install PowerShell 7
