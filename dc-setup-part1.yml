@@ -100,11 +100,7 @@
       when: reboot_check.stdout | trim == "true"
       register: reboot_result
       
-    - name: Reboot if required by feature installation
-      ansible.windows.win_reboot:
-        reboot_timeout: 600
-        post_reboot_delay: 30
-      when: reboot_check.stdout | trim == 'true'
+
     # - name: Wait for Netlogon to be running
     #   ansible.windows.win_service:
     #       name: Netlogon
