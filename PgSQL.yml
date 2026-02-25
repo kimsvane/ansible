@@ -354,8 +354,8 @@
         mode: '0640'
         content: |
           [databases]
-          * = host=/var/run/postgresql auth_user={{ pgbouncer_db_user }}
-          VeeamBackup365 = host=/var/run/postgresql auth_user={{ pgbouncer_db_user }} dbname=VeeamBackup365 pool_size=200
+          * = host=127.0.0.1 port=5432 auth_user={{ pgbouncer_db_user }}
+          VeeamBackup365 = host=127.0.0.1 port=5432 auth_user={{ pgbouncer_db_user }} dbname=VeeamBackup365 pool_size=200
 
           [pgbouncer]
           logfile = /var/log/pgbouncer/pgbouncer.log
