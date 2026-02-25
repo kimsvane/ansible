@@ -279,9 +279,8 @@
       ansible.windows.win_package:
         path: "{{ disk_image_out.mount_paths[0] }}Backup\\Veeam.Backup365.msi"
         arguments: >-
-          /L*V C:\\veeam_install_log.log /qn ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1 CONNECTION="Host={{ postgresql.postgres_host }};Port={{ postgresql.postgres_port | default(6432) }};Database={{ postgresql.postgres_database }};Username={{ postgresql.postgres_user }};Password={{ postgresql.postgres_password }}" JETSTREAM_CONNECTION="nats://{{ nats.username }}:{{ nats.password }}@{{ nats.host }}:{{ nats.port | default(4222) }}"
+          ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1 CONNECTION="Host={{ postgresql.postgres_host }};Port={{ postgresql.postgres_port | default(6432) }};Database={{ postgresql.postgres_database }};Username={{ postgresql.postgres_user }};Password={{ postgresql.postgres_password }}" JETSTREAM_CONNECTION="nats://{{ nats.username }}:{{ nats.password }}@{{ nats.host }}:{{ nats.port | default(4222) }}"
         state: present
-        product_id: "{3F8E3E4D-7E3E-4F3E-8E3E-4F3E8E3E4F3E}"
       async: 3600
       poll: 30
       register: install_result
