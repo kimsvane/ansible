@@ -281,6 +281,7 @@
         arguments: >-
           ADDLOCAL=BR_OFFICE365,CONSOLE_OFFICE365,PS_OFFICE365,REST_OFFICE365 ACCEPT_THIRDPARTY_LICENSES=1 ACCEPT_EULA=1 CONNECTION="Host={{ postgresql.postgres_host }};Port={{ postgresql.postgres_port | default(6432) }};Database={{ postgresql.postgres_database }};Username={{ postgresql.postgres_user }};Password={{ postgresql.postgres_password }}" JETSTREAM_CONNECTION="nats://{{ nats.username }}:{{ nats.password }}@{{ nats.host }}:{{ nats.port | default(4222) }}"
         state: present
+        log_path: C:\veeam_install_log.log
       async: 3600
       poll: 30
       register: install_result
