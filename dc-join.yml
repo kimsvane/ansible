@@ -6,10 +6,20 @@
   tasks:
     - name: Ensure initial WinRM is reachable
       ansible.windows.win_wait_for:
-        port: "{{ ansible_port }}"
-        delay: 5
+        port: 5985
+        delay: 60
         timeout: 300
-        host: "{{ ansible_host | default(inventory_hostname) }}"
+        host: "{{ ansible_host }}"
+      
+    - name: Set Administrator password
+      ansible.windows.win_user:
+        name: Administrator
+        password: "{{ dc_password }}"
+        state: present
+      register: admin_pw_result
+      retries: 3
+      delay: 10
+      until: admin_pw_result is succeeded
 
     - name: Configure DNS to point to primary DC
       ansible.windows.win_shell: |
@@ -20,23 +30,63 @@
             Write-Host "DNS configured for $($adapter.Name)"
         }
 
-    - name: Install AD DS feature
-      ansible.windows.win_feature:
-        name: AD-Domain-Services
-        include_management_tools: yes
-        state: present
-      register: adds_install
+    - name: Install AD using DISM
+      ansible.windows.win_shell: |
+        Start-Transcript -Path "C:\Logs\dism-install.log" -Append
+        
+        # Install using DISM
+        dism.exe /online /enable-feature /featurename:DirectoryServices-DomainController /all /quiet /norestart
+        dism.exe /online /enable-feature /featurename:DirectoryServices-DomainController-Tools /all /quiet /norestart
+        
+        Stop-Transcript
+      async: 1800
+      poll: 30
 
-    - name: Reboot if AD DS installation requires it
+    - name: Fetch installation log
+      ansible.windows.win_shell: Get-Content C:\Logs\dism-install.log -Tail 100
+      register: install_log
+      when: install_result is defined
+
+    - name: Display installation log
+      debug:
+        var: install_log.stdout_lines
+      when: install_log is defined
+
+    - name: Parse feature installation result
+      ansible.windows.win_shell: |
+        Get-WindowsFeature -Name AD-Domain-Services | Select-Object Name, Installed, InstallState | ConvertTo-Json
+      register: feature_status
+
+    - name: Display feature status
+      debug:
+        var: feature_status.stdout | from_json
+
+    - name: Check if reboot is required
+      ansible.windows.win_shell: |
+        if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") { 
+          "true" 
+        } else { 
+          "false" 
+        }
+      register: reboot_check
+
+    - name: Display reboot status
+      debug:
+        msg: "Reboot required: {{ reboot_check.stdout | trim }}"
+      
+    - name: Reboot if required by feature installation
       ansible.windows.win_reboot:
-        msg: "Rebooting after AD DS installation"
-      when: adds_install.reboot_required
+        reboot_timeout: 1200
+        post_reboot_delay: 120
+        test_command: 'whoami'
+      when: reboot_check.stdout | trim == "true"
+      register: reboot_result
 
     - name: Promote to secondary domain controller
       microsoft.ad.domain_controller:
         dns_domain_name: "{{ domain_name }}"
-        domain_admin_user: "{{ domain_user }}@{{ domain_name }}"
-        domain_admin_password: "{{ domain_user_password }}"
+        domain_admin_user: "Administrator@{{ domain_name }}"
+        domain_admin_password: "{{ dc_password }}"
         safe_mode_password: "{{ recovery_password }}"
         install_dns: yes
         state: domain_controller
@@ -45,5 +95,5 @@
     - name: Reboot after DC promotion
       ansible.windows.win_reboot:
         msg: "Rebooting after DC promotion"
-        post_reboot_delay: 60
+        post_reboot_delay: 120
       when: dc_promotion.reboot_required
