@@ -1,69 +1,62 @@
 ---
-- name: Register Linux Proxy in Veeam Backup for Microsoft 365
-  hosts: all
-  gather_facts: no
-  become: no
+  - name: Register Linux Proxy in Veeam Backup for Microsoft 365
+    hosts: controller   # <-- matcher inventory-gruppen ovenfor
+    gather_facts: no
+    become: no
 
+    tasks:
+      - name: Tilføj Linux Proxy i Veeam Backup for Microsoft 365
+        ansible.windows.win_powershell:
+          script: |
+            Import-Module Veeam.Archiver.PowerShell
 
-  vars:
-    graylog_sidecar_version: "1.5.0"
-    graylog_sidecar_rpm: "https://github.com/Graylog2/collector-sidecar/releases/download/{{ graylog_sidecar_version }}/graylog-sidecar-{{ graylog_sidecar_version }}-1.x86_64.rpm"
-    sidecar_config: '/etc/graylog/sidecar/sidecar.yml'
-  tasks:
+            $proxyHostname = "{{ proxy_fqdn }}"
+            $pUser = "{{ proxy_username }}"
+            $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
+            $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
 
-    - name: Tilføj Linux Proxy i Veeam Backup for Microsoft 365
-      ansible.windows.win_powershell:
-        script: |
-          Import-Module Veeam.Archiver.PowerShell
+            $existing = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
 
+            if (!$existing) {
+                Add-VBOProxy -Hostname $proxyHostname -Port {{ proxy_port }} -LinuxCredential $LinuxCred -Force
+                Write-Host "Proxy $proxyHostname er tilføjet."
+            } else {
+                Write-Host "Proxy $proxyHostname eksisterer allerede."
+            }
+        register: add_proxy_result
 
-          $proxyHostname = "{{ proxy_fqdn }}"
-          $pUser = "{{ proxy_username }}"
-          $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
-          $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
+      - name: Vis resultat
+        ansible.builtin.debug:
+          var: add_proxy_result.output
+    # - name: Install Graylog Sidecar RPM
+    #   ansible.builtin.dnf:
+    #     name: "{{ graylog_sidecar_rpm }}"
+    #     state: present
+    #     disable_gpg_check: true
 
+    # - name: Configure Graylog Sidecar (sidecar.yml)
+    #   ansible.builtin.template:
+    #     src: templates/sidecar.yml.j2
+    #     dest: "{{ sidecar_config }}"
+    #     owner: root
+    #     group: root
+    #     mode: '0640'
+    #   notify: Restart Graylog Sidecar
 
-          $existing = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
+    # - name: Install Graylog Sidecar service
+    #   ansible.builtin.command:
+    #     cmd: graylog-sidecar -service install
+    #     creates: /etc/systemd/system/graylog-sidecar.service
 
-          if (!$existing) {
+    # - name: Enable and start Graylog Sidecar
+    #   ansible.builtin.systemd:
+    #     name: graylog-sidecar
+    #     enabled: true
+    #     state: started
+    #     daemon_reload: true
 
-
-              Add-VBOProxy -Hostname $proxyHostname -Port {{ proxy_port }} -LinuxCredential $LinuxCred -Force
-              
-              Write-Host "Proxy $proxyHostname er tilføjet."
-          } else {
-              Write-Host "Proxy $proxyHostname eksisterer allerede."
-          }
-      register: add_proxy_result
-    - name: Install Graylog Sidecar RPM
-      ansible.builtin.dnf:
-        name: "{{ graylog_sidecar_rpm }}"
-        state: present
-        disable_gpg_check: true
-
-    - name: Configure Graylog Sidecar (sidecar.yml)
-      ansible.builtin.template:
-        src: templates/sidecar.yml.j2
-        dest: "{{ sidecar_config }}"
-        owner: root
-        group: root
-        mode: '0640'
-      notify: Restart Graylog Sidecar
-
-    - name: Install Graylog Sidecar service
-      ansible.builtin.command:
-        cmd: graylog-sidecar -service install
-        creates: /etc/systemd/system/graylog-sidecar.service
-
-    - name: Enable and start Graylog Sidecar
-      ansible.builtin.systemd:
-        name: graylog-sidecar
-        enabled: true
-        state: started
-        daemon_reload: true
-
-  handlers:
-    - name: Restart Graylog Sidecar
-      ansible.builtin.systemd:
-        name: graylog-sidecar
-        state: restarted
+  # handlers:
+  #   - name: Restart Graylog Sidecar
+  #     ansible.builtin.systemd:
+  #       name: graylog-sidecar
+  #       state: restarted
