@@ -1,0 +1,11 @@
+- name: Domain Controller Setup - PART 2 (Promotion and Configuration)
+  hosts: dc
+  gather_facts: no
+
+  tasks:
+    - name: Create proxy server record
+      ansible.windows.win_dns_record:
+        name: "{{ dns_name }}"
+        type: "A"
+        value: "{{ dns_ip }}"
+        zone: "{{ domain_name }}"
