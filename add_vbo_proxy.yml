@@ -25,22 +25,21 @@
                 Write-Host "Proxy $proxyHostname eksisterer allerede."
             }
 
-            # Opret pool hvis den ikke eksisterer
             $pool = Get-VBOProxyPool | Where-Object { $_.Name -eq $poolName }
             if (!$pool) {
-                $pool = Add-VBOProxyPool -Name $poolName
-                Write-Host "Pool $poolName oprettet."
-            }
-
-            # Tilføj proxy til pool hvis den ikke allerede er medlem
-            $memberExists = $pool.Proxies | Where-Object { $_.Hostname -eq $proxyHostname }
-            if (!$memberExists) {
-                $updatedProxies = @($pool.Proxies) + $proxy
-                Set-VBOProxyPool -ProxyPool $pool -Proxy $updatedProxies
-                Write-Host "Proxy $proxyHostname tilføjet til pool $poolName."
-            } else {
-                Write-Host "Proxy $proxyHostname er allerede medlem af pool $poolName."
-            }
+                $pool = Add-VBOProxyPool -Name $poolName -Proxies $proxy
+                Write-Host "Pool $poolName oprettet med proxy $proxyHostname."
+              } else {
+                # Tilføj proxy til pool hvis den ikke allerede er medlem
+                $memberExists = $pool.Proxies | Where-Object { $_.Hostname -eq $proxyHostname }
+                if (!$memberExists) {
+                    $updatedProxies = @($pool.Proxies) + $proxy
+                    Set-VBOProxyPool -ProxyPool $pool -Proxies $updatedProxies
+                    Write-Host "Proxy $proxyHostname tilføjet til pool $poolName."
+                } else {
+                    Write-Host "Proxy $proxyHostname er allerede medlem af pool $poolName."
+                }
+              }
         register: add_proxy_result
 
       - name: Vis resultat
