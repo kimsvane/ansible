@@ -5,17 +5,6 @@
     become: no
 
     tasks:
-
-      - name: Opret SSH konfigurationsfil
-        ansible.builtin.copy:
-          dest: /etc/ssh/sshd_config.d/99-proxy.conf
-          owner: root
-          group: root
-          mode: '0600'
-          content: |
-            PermitRootLogin no
-            PasswordAuthentication yes
-        notify: Genstart SSH
       - name: Tilføj Linux Proxy i Veeam Backup for Microsoft 365
         ansible.windows.win_powershell:
           script: |
@@ -35,12 +24,6 @@
                 Write-Host "Proxy $proxyHostname eksisterer allerede."
             }
         register: add_proxy_result
-
-    handlers:
-      - name: Genstart SSH
-        ansible.builtin.service:
-          name: sshd
-          state: restarted
       - name: Vis resultat
         ansible.builtin.debug:
           var: add_proxy_result.output
