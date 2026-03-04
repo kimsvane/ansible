@@ -1,0 +1,14 @@
+---
+  - name: Setup proxy
+    hosts: proxies   # <-- matcher inventory-gruppen ovenfor
+    gather_facts: no
+    become: no
+
+    tasks:
+
+
+    - name: Installer .NET Runtime 8.0
+      ansible.builtin.dnf:
+        name: dotnet-runtime-8.0
+        state: present
+
