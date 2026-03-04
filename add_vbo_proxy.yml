@@ -5,57 +5,43 @@
     become: no
 
     tasks:
-      - name: Tilføj Linux Proxy i Veeam Backup for Microsoft 365
+      - name: Tilføj Linux Proxy og tildel pool i Veeam Backup for Microsoft 365
         ansible.windows.win_powershell:
-          script: |
-            Import-Module Veeam.Archiver.PowerShell
+              script: |
 
-            $proxyHostname = "{{ proxy_fqdn }}"
-            $pUser = "{{ proxy_username }}"
-            $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
-            $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
+                $proxyHostname = "{{ proxy_fqdn }}"
+                $poolName      = "{{ proxy_pool_name }}"
+                $pUser = "{{ proxy_username }}"
+                $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
+                $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
 
-            $existing = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
+                # Tilføj proxy hvis den ikke eksisterer
+                $proxy = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
+                if (!$proxy) {
+                    $proxy = Add-VBOProxy -Hostname $proxyHostname -Port {{ proxy_port }} -LinuxCredential $LinuxCred -Force
+                    Write-Host "Proxy $proxyHostname er tilføjet."
+                } else {
+                    Write-Host "Proxy $proxyHostname eksisterer allerede."
+                }
 
-            if (!$existing) {
-                Add-VBOProxy -Hostname $proxyHostname -Port {{ proxy_port }} -LinuxCredential $LinuxCred -Force
-                Write-Host "Proxy $proxyHostname er tilføjet."
-            } else {
-                Write-Host "Proxy $proxyHostname eksisterer allerede."
-            }
+                # Opret pool hvis den ikke eksisterer
+                $pool = Get-VBOProxyPool | Where-Object { $_.Name -eq $poolName }
+                if (!$pool) {
+                    $pool = Add-VBOProxyPool -Name $poolName -Proxy $proxy
+                    Write-Host "Pool $poolName oprettet med proxy $proxyHostname."
+                } else {
+                    # Pool eksisterer - tilføj proxy til den hvis den ikke allerede er medlem
+                    $memberExists = $pool.Proxies | Where-Object { $_.Hostname -eq $proxyHostname }
+                    if (!$memberExists) {
+                        $updatedProxies = $pool.Proxies + $proxy
+                        Set-VBOProxyPool -ProxyPool $pool -Proxy $updatedProxies
+                        Write-Host "Proxy $proxyHostname tilføjet til eksisterende pool $poolName."
+                    } else {
+                        Write-Host "Proxy $proxyHostname er allerede medlem af pool $poolName."
+                    }
+                }
         register: add_proxy_result
+
       - name: Vis resultat
         ansible.builtin.debug:
-          var: add_proxy_result.output
-    # - name: Install Graylog Sidecar RPM
-    #   ansible.builtin.dnf:
-    #     name: "{{ graylog_sidecar_rpm }}"
-    #     state: present
-    #     disable_gpg_check: true
-
-    # - name: Configure Graylog Sidecar (sidecar.yml)
-    #   ansible.builtin.template:
-    #     src: templates/sidecar.yml.j2
-    #     dest: "{{ sidecar_config }}"
-    #     owner: root
-    #     group: root
-    #     mode: '0640'
-    #   notify: Restart Graylog Sidecar
-
-    # - name: Install Graylog Sidecar service
-    #   ansible.builtin.command:
-    #     cmd: graylog-sidecar -service install
-    #     creates: /etc/systemd/system/graylog-sidecar.service
-
-    # - name: Enable and start Graylog Sidecar
-    #   ansible.builtin.systemd:
-    #     name: graylog-sidecar
-    #     enabled: true
-    #     state: started
-    #     daemon_reload: true
-
-  # handlers:
-  #   - name: Restart Graylog Sidecar
-  #     ansible.builtin.systemd:
-  #       name: graylog-sidecar
-  #       state: restarted
+              var: add_proxy_result.host_out
