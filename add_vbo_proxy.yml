@@ -13,7 +13,7 @@
           group: root
           mode: '0600'
           content: |
-            PermitRootLogin yes
+            PermitRootLogin no
             PasswordAuthentication yes
         notify: Genstart SSH
       - name: Tilføj Linux Proxy i Veeam Backup for Microsoft 365
