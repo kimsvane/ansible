@@ -5,43 +5,44 @@
     become: no
 
     tasks:
-      - name: Tilføj Linux Proxy og tildel pool i Veeam Backup for Microsoft 365
-        ansible.windows.win_powershell:
-          script: |
-            Import-Module Veeam.Archiver.PowerShell
+    - name: Tilføj Linux Proxy og tildel pool i Veeam Backup for Microsoft 365
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module Veeam.Archiver.PowerShell
 
-            $proxyHostname = "{{ proxy_fqdn }}"
-            $poolName      = "{{ proxy_pool_name }}"
-            $pUser = "{{ proxy_username }}"
-            $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
-            $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
+          $proxyHostname = "{{ proxy_fqdn }}"
+          $poolName      = "{{ proxy_pool_name }}"
+          $pUser = "{{ proxy_username }}"
+          $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
+          $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
 
-            # Tilføj proxy hvis den ikke eksisterer
-            $proxy = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
-            if (!$proxy) {
-                $proxy = Add-VBOProxy -Hostname $proxyHostname -Port {{ proxy_port }} -LinuxCredential $LinuxCred -Force
-                Write-Host "Proxy $proxyHostname er tilføjet."
-            } else {
-                Write-Host "Proxy $proxyHostname eksisterer allerede."
-            }
+          # Tilføj proxy hvis den ikke eksisterer
+          $proxy = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
+          if (!$proxy) {
+              $proxy = Add-VBOProxy -Hostname $proxyHostname -Port {{ proxy_port }} -LinuxCredential $LinuxCred -Force
+              Write-Host "Proxy $proxyHostname er tilføjet."
+          } else {
+              Write-Host "Proxy $proxyHostname eksisterer allerede."
+          }
 
-            $pool = Get-VBOProxyPool | Where-Object { $_.Name -eq $poolName }
-            if (!$pool) {
-                $pool = Add-VBOProxyPool -Name $poolName -Proxies $proxy
-                Write-Host "Pool $poolName oprettet med proxy $proxyHostname."
+          # Opret pool hvis den ikke eksisterer
+          $pool = Get-VBOProxyPool | Where-Object { $_.Name -eq $poolName }
+          if (!$pool) {
+              $pool = Add-VBOProxyPool -Name $poolName -Proxies $proxy
+              Write-Host "Pool $poolName oprettet med proxy $proxyHostname."
+          } else {
+              # Tilføj proxy til pool hvis den ikke allerede er medlem
+              $memberExists = $pool.Proxies | Where-Object { $_.Hostname -eq $proxyHostname }
+              if (!$memberExists) {
+                  $updatedProxies = @($pool.Proxies) + $proxy
+                  Set-VBOProxyPool -Pool $pool -Proxies $updatedProxies
+                  Write-Host "Proxy $proxyHostname tilføjet til pool $poolName."
               } else {
-                # Tilføj proxy til pool hvis den ikke allerede er medlem
-                $memberExists = $pool.Proxies | Where-Object { $_.Hostname -eq $proxyHostname }
-                if (!$memberExists) {
-                    $updatedProxies = @($pool.Proxies) + $proxy
-                    Set-VBOProxyPool -ProxyPool $pool -Proxies $updatedProxies
-                    Write-Host "Proxy $proxyHostname tilføjet til pool $poolName."
-                } else {
-                    Write-Host "Proxy $proxyHostname er allerede medlem af pool $poolName."
-                }
+                  Write-Host "Proxy $proxyHostname er allerede medlem af pool $poolName."
               }
-        register: add_proxy_result
+          }
+      register: add_proxy_result
 
-      - name: Vis resultat
-        ansible.builtin.debug:
-          var: add_proxy_result.host_out
+    - name: Result of adding proxy
+      ansible.builtin.debug:
+        var: add_proxy_result.host_out
