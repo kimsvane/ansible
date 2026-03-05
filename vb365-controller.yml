@@ -7,8 +7,8 @@
     vb365_iso_path: "C:\\{{ vb365_iso_filename }}"
     temp_dir: 'C:\Temp'
     sidecar_install_dir: 'C:\Program Files\Graylog\sidecar'
-    graylog_sidecar_version: "1.4.0"
-    graylog_sidecar_installer: "graylog_sidecar_installer_{{ graylog_sidecar_version }}_amd64.exe"
+    graylog_sidecar_version: "1.5.2"
+    graylog_sidecar_installer: "graylog-sidecar-{{ graylog_sidecar_version }}-1.msi"
     graylog_sidecar_url: "https://github.com/Graylog2/collector-sidecar/releases/download/{{ graylog_sidecar_version }}/{{ graylog_sidecar_installer }}"
     vb365_temp_folder:     "G:\\RestoreCache"
     vb365_retention_weeks: 52
@@ -411,10 +411,10 @@
     - name: Install Graylog Sidecar (silent)
       ansible.windows.win_package:
         path: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
-        # NSIS-installer: argumenter skal være én samlet streng, ikke en liste
-        arguments: "/S -SERVERURL={{ graylog_server_url }} -APITOKEN={{ graylog_api_token }}"
+        arguments: "/quiet SERVERURL={{ graylog_server_url }} APITOKEN={{ graylog_api_token }}"
         state: present
         creates_path: "{{ sidecar_install_dir }}\\graylog-sidecar.exe"
+
 
     - name: Set node_name and node_id to server FQDN in sidecar.yml
       ansible.windows.win_powershell:
