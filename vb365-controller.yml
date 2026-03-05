@@ -10,6 +10,9 @@
     graylog_sidecar_version: "1.4.0"
     graylog_sidecar_installer: "graylog_sidecar_installer_{{ graylog_sidecar_version }}_amd64.exe"
     graylog_sidecar_url: "https://github.com/Graylog2/collector-sidecar/releases/download/{{ graylog_sidecar_version }}/{{ graylog_sidecar_installer }}"
+    vb365_temp_folder:     "G:\\RestoreCache"
+    vb365_retention_weeks: 52
+    vb365_config_file:     "C:\\ProgramData\\Veeam\\Backup365\\Config.xml"
 
     # Disse variabler forventes fra Terraform-genereret fil
     # postgres_host: "{{ postgres_host }}"
@@ -300,80 +303,166 @@
         image_path: "{{ vb365_iso_path }}"
         state: absent
 
+    - name: "Temp-mappe | Opret {{ vb365_temp_folder }}"
+      ansible.windows.win_file:
+        path: "{{ vb365_temp_folder }}"
+        state: directory
 
-    # - name: Ensure temp directory exists
-    #   ansible.windows.win_file:
-    #     path: "{{ temp_dir }}"
-    #     state: directory
+    - name: "Temp-mappe | Sæt VB365 til at bruge {{ vb365_temp_folder }}"
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module Veeam.Archiver.PowerShell -ErrorAction Stop
+          $current = (Get-VBOServer).TempFolderPath
+          if ($current -ne "{{ vb365_temp_folder }}") {
+              Set-VBOServer -TempFolderPath "{{ vb365_temp_folder }}"
+              Write-Output "CHANGED"
+          } else {
+              Write-Output "OK"
+          }
+      register: result_temp
+      changed_when: "'CHANGED' in (result_temp.output | join(''))"
 
-    # - name: Download Graylog Sidecar installer
-    #   ansible.windows.win_get_url:
-    #     url: "{{ graylog_sidecar_url }}"
-    #     dest: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
-    #     force: false
+    # ── 2. Session history retention: 52 uger ──────────────
+    # Cmdlet: Set-VBOHistorySettings -KeepOnlyLastXweeks
+    # Ref: helpcenter.veeam.com/docs/vbo365/powershell/set-vbohistorysettings.html
+    - name: "Retention | Sæt job session history til {{ vb365_retention_weeks }} uger"
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module Veeam.Archiver.PowerShell -ErrorAction Stop
+          $current = (Get-VBOHistorySettings).KeepOnlyLastXweeks
+          if ($current -ne {{ vb365_retention_weeks }}) {
+              Set-VBOHistorySettings -KeepOnlyLastXweeks {{ vb365_retention_weeks }}
+              Write-Output "CHANGED"
+          } else {
+              Write-Output "OK"
+          }
+      register: result_retention
+      changed_when: "'CHANGED' in (result_retention.output | join(''))"
 
-    # - name: Install Graylog Sidecar (silent)
-    #   ansible.windows.win_package:
-    #     path: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
-    #     arguments:
-    #       - /S
-    #       - "-SERVERURL={{ graylog_server_url }}"
-    #       - "-APITOKEN={{ graylog_api_token }}"
-    #     state: present
-    #     creates_path: "{{ sidecar_install_dir }}\\graylog-sidecar.exe"
+    # ── 3. WCF OperationTimeout i Archiver-config ──────────
+    - name: "Config | Tag backup af konfigurationsfilen"
+      ansible.windows.win_copy:
+        src: "{{ vb365_config_file }}"
+        dest: "{{ vb365_config_file }}.bak_{{ ansible_date_time.date }}"
+        remote_src: true
 
-    # - name: Install Graylog Sidecar as Windows service
-    #   ansible.windows.win_command:
-    #     cmd: '"{{ sidecar_install_dir }}\graylog-sidecar.exe" -service install'
-    #     creates: 'HKLM:\SYSTEM\CurrentControlSet\Services\graylog-sidecar'
+    - name: "Config | Indsæt <WCF OperationTimeout='2400' /> i Archiver-sektionen"
+      ansible.windows.win_powershell:
+        script: |
+          $configPath = "{{ vb365_config_file }}"
+          [xml]$config = Get-Content $configPath -Encoding UTF8
 
-    # - name: Ensure Graylog Sidecar service is running and set to auto-start
-    #   ansible.windows.win_service:
-    #     name: graylog-sidecar
-    #     state: started
-    #     start_mode: auto
+          $archiverNode = $config.SelectSingleNode("//Archiver")
+          if ($null -eq $archiverNode) {
+              $archiverNode = $config.CreateElement("Archiver")
+              $config.DocumentElement.AppendChild($archiverNode) | Out-Null
+          }
 
-    # - name: Allow Graylog Sidecar through Windows Firewall (outbound)
-    #   community.windows.win_firewall_rule:
-    #     name: "Graylog Sidecar Outbound"
-    #     localport: any
-    #     remoteport: any
-    #     direction: out
-    #     protocol: tcp
-    #     program: '{{ sidecar_install_dir }}\graylog-sidecar.exe'
-    #     action: allow
-    #     state: present
-    #     enabled: true
+          $wcfNode = $archiverNode.SelectSingleNode("WCF")
+          if ($null -eq $wcfNode) {
+              $wcf = $config.CreateElement("WCF")
+              $wcf.SetAttribute("OperationTimeout", "2400")
+              $archiverNode.AppendChild($wcf) | Out-Null
+              $config.Save($configPath)
+              Write-Output "CHANGED"
+          } elseif ($wcfNode.GetAttribute("OperationTimeout") -ne "2400") {
+              $wcfNode.SetAttribute("OperationTimeout", "2400")
+              $config.Save($configPath)
+              Write-Output "CHANGED"
+          } else {
+              Write-Output "OK"
+          }
+      register: result_wcf
+      changed_when: "'CHANGED' in (result_wcf.output | join(''))"
 
-    # - name: Cleanup installer
-    #   ansible.windows.win_file:
-    #     path: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
-    #     state: absent
+    # ── 4. Genstart service hvis config blev ændret ────────
+    - name: "Service | Genstart Veeam Archiver Service"
+      ansible.windows.win_service:
+        name: "Veeam.Archiver.Service"
+        state: restarted
+      when: result_wcf.changed
+
+  # ──────────────────────────────────────────────────────────
+  # POST-TASKS: Verificering
+  # ──────────────────────────────────────────────────────────
+  post_tasks:
+    - name: "Verificer | Vis aktuel VB365 konfiguration"
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module Veeam.Archiver.PowerShell -ErrorAction Stop
+          Write-Output "TempFolder        : $((Get-VBOServer).TempFolderPath)"
+          Write-Output "Session retention : $((Get-VBOHistorySettings).KeepOnlyLastXweeks) uger"
+      register: verify_output
+
+    - name: "Verificer | Udskriv status"
+      ansible.builtin.debug:
+        msg: "{{ verify_output.output }}"
+    - name: Ensure temp directory exists
+      ansible.windows.win_file:
+        path: "{{ temp_dir }}"
+        state: directory
+
+    - name: Download Graylog Sidecar installer
+      ansible.windows.win_get_url:
+        url: "{{ graylog_sidecar_url }}"
+        dest: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
+        force: false
+
+    - name: Install Graylog Sidecar (silent)
+      ansible.windows.win_package:
+        path: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
+        # NSIS-installer: argumenter skal være én samlet streng, ikke en liste
+        arguments: "/S -SERVERURL={{ graylog_server_url }} -APITOKEN={{ graylog_api_token }}"
+        state: present
+        creates_path: "{{ sidecar_install_dir }}\\graylog-sidecar.exe"
+
+    - name: Set node_name and node_id to server FQDN in sidecar.yml
+      ansible.windows.win_powershell:
+        script: |
+          $configPath = "{{ sidecar_install_dir }}\sidecar.yml"
+          $fqdn = "{{ ansible_fqdn }}"
+          $content = Get-Content $configPath -Raw
+
+          $content = $content -replace '(?m)^node_name:.*$', "node_name: `"$fqdn`""
+          $content = $content -replace '(?m)^node_id:.*$',   "node_id: `"$fqdn`""
+
+          Set-Content -Path $configPath -Value $content -Encoding UTF8
+          Write-Output "CHANGED: node_name og node_id sat til $fqdn"
+      changed_when: true
+
+    - name: Check if Graylog Sidecar service already exists
+      ansible.windows.win_service_info:
+        name: graylog-sidecar
+      register: sidecar_service_info
+
+    - name: Install Graylog Sidecar as Windows service
+      # creates: virker kun på filsystem-stier, ikke registry – tjekkes via win_service_info i stedet
+      ansible.windows.win_command:
+        cmd: '"{{ sidecar_install_dir }}\graylog-sidecar.exe" -service install'
+      when: not sidecar_service_info.exists
+
+    - name: Ensure Graylog Sidecar service is running and set to auto-start
+      ansible.windows.win_service:
+        name: graylog-sidecar
+        state: started
+        start_mode: auto
+
+    - name: Allow Graylog Sidecar through Windows Firewall (outbound)
+      community.windows.win_firewall_rule:
+        name: "Graylog Sidecar Outbound"
+        direction: out
+        protocol: tcp
+        program: "{{ sidecar_install_dir }}\\graylog-sidecar.exe"
+        action: allow
+        state: present
+        enabled: true
+
+    - name: Cleanup installer
+      ansible.windows.win_file:
+        path: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
+        state: absent
 
 
     - name: Reboot server after installation
       ansible.windows.win_reboot:
         reboot_timeout: 600
-#Kør kommando til at sætte restore drev op
-#Kør kommando til at sætte veeam til at bruge restor drev
-
-#         # PostgreSQL connection details
-# postgres_host: "postgres-server.vb365.2any.cloud"
-# postgres_port: 5432
-# postgres_database: "VeeamBackup365"
-# postgres_user: "veeam_admin"
-# postgres_password: "{{ vault_postgres_password }}"  # Brug Ansible Vault!
-
-# # NATS connection details
-# nats_host: "nats-server.vb365.2any.cloud"
-# nats_port: 4222
-
-# # Domain information (hvis de skal variere per miljø)
-# domain_name: "VB365.2any.cloud"
-# domain_admin_user: "ADSA@VB365.2any.cloud"
-# domain_admin_password: "{{ vault_domain_password }}"  # Brug Ansible Vault!
-
-# # DNS servers
-# dns_servers:
-#   - 10.251.132.7
-#   - 10.251.132.6
