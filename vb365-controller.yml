@@ -471,17 +471,19 @@
       ansible.windows.win_get_url:
         url: "{{ item.url }}"
         dest: "D:\\Utility\\{{ item.file }}"
-        force: false
+        # Vi sætter force: true midlertidigt for at overskrive de potentielt ødelagte filer
+        force: true 
       loop:
-        - { url: "https://winscp.net/download/files/20260306104721e62c3e19ee17e590ba1cfaa51615fd/WinSCP-6.5.5-Portable.zip", file: "WinSCP.zip" }
+        # Bemærk: Jeg har opdateret WinSCP linket til deres officielle statiske download
+        - { url: "https://master.dl.sourceforge.net/project/winscp/WinSCP/6.3.2/WinSCP-6.3.2-Portable.zip", file: "WinSCP.zip" }
         - { url: "https://download.sysinternals.com/files/ProcessExplorer.zip", file: "ProcessExplorer.zip" }
-        - { url: "https://files.budman.pw/?file=iperf3.1.1_32.zip", file: "iperf3.zip" }
+        - { url: "https://files.budman.pw/?file=iperf3.1.4_64.zip", file: "iperf3.zip" }
 
-    - name: Unzip to Utility folder and delete zip files
+    - name: extract tools
       community.windows.win_unzip:
         src: "D:\\Utility\\{{ item.file }}"
         dest: "D:\\Utility\\{{ item.folder }}"
-        delete_archive: yes  # Dette sletter zip-filen automatisk efter udpakning
+        delete_archive: yes
       loop:
         - { file: "WinSCP.zip", folder: "WinSCP" }
         - { file: "ProcessExplorer.zip", folder: "ProcessExplorer" }
