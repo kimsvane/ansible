@@ -441,11 +441,11 @@
         cmd: '"{{ sidecar_install_dir }}\graylog-sidecar.exe" -service install'
       when: not sidecar_service_info.exists
 
-    - name: Ensure Graylog Sidecar service is running and set to auto-start
-      ansible.windows.win_service:
-        name: graylog-sidecar
-        state: started
-        start_mode: auto
+    # - name: Ensure Graylog Sidecar service is running and set to auto-start
+    #   ansible.windows.win_service:
+    #     name: graylog-sidecar
+    #     state: started
+    #     start_mode: auto
 
     - name: Allow Graylog Sidecar through Windows Firewall (outbound)
       community.windows.win_firewall_rule:
