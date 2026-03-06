@@ -461,7 +461,29 @@
       ansible.windows.win_file:
         path: "{{ temp_dir }}\\{{ graylog_sidecar_installer }}"
         state: absent
+    
+    - name: "Utility mappe | Opret E:\\Utility hvis den ikke eksisterer"
+      ansible.windows.win_file:
+        path: "E:\\Utility"
+        state: directory
 
+    - name: Download WinSCP 
+      ansible.windows.win_get_url:
+        url: "https://winscp.net/download/files/20260306104721e62c3e19ee17e590ba1cfaa51615fd/WinSCP-6.5.5-Portable.zip"
+        dest: "E:\\Utility\\WinSCP-6.5.5-Portable.zip"
+        force: false
+
+    - name: Download Process Explorer 
+      ansible.windows.win_get_url:
+        url: "https://download.sysinternals.com/files/ProcessExplorer.zip"
+        dest: "E:\\Utility\\ProcessExplorer.zip"
+        force: false
+
+    - name: Download iPerf3
+      ansible.windows.win_get_url:
+        url: "https://files.budman.pw/?file=iperf3.1.1_32.zip"
+        dest: "E:\\Utility\\iperf3.1.1_32.zip"
+        force: false
 
     - name: Reboot server after installation
       ansible.windows.win_reboot:
