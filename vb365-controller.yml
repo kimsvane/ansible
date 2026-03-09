@@ -374,7 +374,105 @@
           }
       register: result_wcf
       changed_when: "'CHANGED' in (result_wcf.output | join(''))"
+# ── 5. Aktiver REST API med self-signed certifikat ─────
+    - name: "REST API | Aktiver med self-signed certifikat"
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module Veeam.Archiver.PowerShell -ErrorAction Stop
 
+          $current = Get-VBORestAPISettings
+          if ($current.IsServiceEnabled) {
+              Write-Output "OK"
+              exit
+          }
+
+          # Generér self-signed certifikat (gyldigt i 10 år)
+          $hostname = $env:COMPUTERNAME
+          $cert = New-SelfSignedCertificate `
+              -Subject "CN=$hostname" `
+              -KeyExportPolicy Exportable `
+              -KeyUsageProperty All `
+              -Type Custom `
+              -NotAfter (Get-Date).AddYears(10) `
+              -FriendlyName "Veeam VB365 REST API"
+
+          # Eksportér til PFX så Set-VBORestAPISettings kan indlæse den
+          $pw        = ConvertTo-SecureString "TempCertPw!1" -AsPlainText -Force
+          $certFile  = "C:\Windows\Temp\vb365_rest_selfsigned.pfx"
+          Export-PfxCertificate -Cert $cert -FilePath $certFile -Password $pw | Out-Null
+
+          Set-VBORestAPISettings `
+              -EnableService `
+              -CertificateFilePath $certFile `
+              -CertificatePassword $pw `
+              -HTTPSPort 4443 `
+              -AuthTokenLifeTime 60
+
+          Remove-Item $certFile -Force
+          Write-Output "CHANGED"
+      register: result_rest_api
+      changed_when: "'CHANGED' in (result_rest_api.output | join(''))"
+
+    # ── 6. Vent på at REST-servicen er oppe ───────────────
+    - name: "REST API | Vent på Veeam.Archiver.REST service"
+      ansible.windows.win_service:
+        name: "Veeam.Archiver.REST"
+        state: started
+        start_mode: auto
+      when: result_rest_api.changed
+
+    # ── 7. Tilføj <Throttling> som child i <Rest>-noden ──
+    - name: "Config | Indsæt <Throttling> under <Rest>-noden"
+      ansible.windows.win_powershell:
+        script: |
+          $configPath = "{{ vb365_config_file }}"
+          [xml]$config = Get-Content $configPath -Encoding UTF8
+
+          $restNode = $config.SelectSingleNode("//Rest")
+          if ($null -eq $restNode) {
+              Write-Output "SKIP: Ingen <Rest>-node fundet i config"
+              exit
+          }
+
+          $throttleNode = $restNode.SelectSingleNode("Throttling")
+          $desired = @{
+              EndpointAnonymousPerSecond = "1000"
+              EndpointAnonymousPerMinute = "6000"
+              EndpointAnonymousPerHour   = "150000"
+          }
+
+          if ($null -eq $throttleNode) {
+              $t = $config.CreateElement("Throttling")
+              foreach ($key in $desired.Keys) {
+                  $t.SetAttribute($key, $desired[$key])
+              }
+              $restNode.AppendChild($t) | Out-Null
+              $config.Save($configPath)
+              Write-Output "CHANGED"
+          } else {
+              $needsUpdate = $false
+              foreach ($key in $desired.Keys) {
+                  if ($throttleNode.GetAttribute($key) -ne $desired[$key]) {
+                      $throttleNode.SetAttribute($key, $desired[$key])
+                      $needsUpdate = $true
+                  }
+              }
+              if ($needsUpdate) {
+                  $config.Save($configPath)
+                  Write-Output "CHANGED"
+              } else {
+                  Write-Output "OK"
+              }
+          }
+      register: result_throttling
+      changed_when: "'CHANGED' in (result_throttling.output | join(''))"
+
+    # ── 8. Genstart REST-service hvis throttling blev ændret
+    - name: "Service | Genstart Veeam.Archiver.REST ved config-ændring"
+      ansible.windows.win_service:
+        name: "Veeam.Archiver.REST"
+        state: restarted
+      when: result_throttling.changed
     # ── 4. Genstart service hvis config blev ændret ────────
     - name: "Service | Genstart Veeam Archiver Service"
       ansible.windows.win_service:
