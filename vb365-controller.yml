@@ -422,63 +422,45 @@
       when: result_rest_api.changed
 
     # ── 7. Tilføj <Throttling> som child i <Rest>-noden ──
-    - name: "Config | Indsæt <Throttling> under <Rest>-noden"
+    - name: "Config | Tag backup af konfigurationsfilen"
+      ansible.windows.win_copy:
+        src: "{{ vb365_config_file }}"
+        dest: "{{ vb365_config_file }}.bak_{{ ansible_date_time.date }}"
+        remote_src: true
+
+    - name: "Config | Konvertér <Rest .../> og indsæt <Throttling> som separat blok"
       ansible.windows.win_powershell:
         script: |
           $configPath = "{{ vb365_config_file }}"
-          [xml]$config = Get-Content $configPath -Encoding UTF8
+          $content = Get-Content $configPath -Raw -Encoding UTF8
 
-          $restNode = $config.SelectSingleNode("//Rest")
-          if ($null -eq $restNode) {
-              Write-Output "SKIP: Ingen <Rest>-node fundet i config"
+          # Allerede migreret?
+          if ($content -match '<Throttling') {
+              Write-Output "OK"
               exit
           }
 
-          $throttleNode = $restNode.SelectSingleNode("Throttling")
-          $desired = @{
-              EndpointAnonymousPerSecond = "1000"
-              EndpointAnonymousPerMinute = "6000"
-              EndpointAnonymousPerHour   = "150000"
+          # Find den self-closing Rest-tag og skær />" fra enden
+          # Erstat afsluttende /> med >, tilføj Throttling-child, luk med </Rest>
+          $throttling = '        <Throttling EndpointAnonymousPerSecond="1000" EndpointAnonymousPerMinute="6000" EndpointAnonymousPerHour="150000" />'
+
+          $new = $content -replace '(<Rest\s[^>]+)/>', "`$1>`r`n$throttling`r`n      </Rest>"
+
+          if ($new -eq $content) {
+              Write-Output "SKIP: Ingen self-closing <Rest />-node fundet"
+              exit
           }
 
-          if ($null -eq $throttleNode) {
-              $t = $config.CreateElement("Throttling")
-              foreach ($key in $desired.Keys) {
-                  $t.SetAttribute($key, $desired[$key])
-              }
-              $restNode.AppendChild($t) | Out-Null
-              $config.Save($configPath)
-              Write-Output "CHANGED"
-          } else {
-              $needsUpdate = $false
-              foreach ($key in $desired.Keys) {
-                  if ($throttleNode.GetAttribute($key) -ne $desired[$key]) {
-                      $throttleNode.SetAttribute($key, $desired[$key])
-                      $needsUpdate = $true
-                  }
-              }
-              if ($needsUpdate) {
-                  $config.Save($configPath)
-                  Write-Output "CHANGED"
-              } else {
-                  Write-Output "OK"
-              }
-          }
+          Set-Content -Path $configPath -Value $new -Encoding UTF8 -NoNewline
+          Write-Output "CHANGED"
       register: result_throttling
       changed_when: "'CHANGED' in (result_throttling.output | join(''))"
 
-    # ── 8. Genstart REST-service hvis throttling blev ændret
-    - name: "Service | Genstart Veeam.Archiver.REST ved config-ændring"
+    - name: "Service | Genstart Veeam.Archiver.REST ved throttling-ændring"
       ansible.windows.win_service:
-        name: "Veeam.Archiver.REST"
+        name: "Veeam.Archiver.REST.Service"
         state: restarted
       when: result_throttling.changed
-    # ── 4. Genstart service hvis config blev ændret ────────
-    - name: "Service | Genstart Veeam Archiver Service"
-      ansible.windows.win_service:
-        name: "Veeam.Archiver.Service"
-        state: restarted
-      when: result_wcf.changed
 
   # ──────────────────────────────────────────────────────────
   # POST-TASKS: Verificering
