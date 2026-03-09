@@ -416,18 +416,12 @@
     # ── 6. Vent på at REST-servicen er oppe ───────────────
     - name: "REST API | Vent på Veeam.Archiver.REST service"
       ansible.windows.win_service:
-        name: "Veeam.Archiver.REST"
+        name: "Veeam.Archiver.REST.service"
         state: started
         start_mode: auto
       when: result_rest_api.changed
 
     # ── 7. Tilføj <Throttling> som child i <Rest>-noden ──
-    - name: "Config | Tag backup af konfigurationsfilen"
-      ansible.windows.win_copy:
-        src: "{{ vb365_config_file }}"
-        dest: "{{ vb365_config_file }}.bak_{{ ansible_date_time.date }}"
-        remote_src: true
-
     - name: "Config | Konvertér <Rest .../> og indsæt <Throttling> som separat blok"
       ansible.windows.win_powershell:
         script: |
@@ -458,7 +452,7 @@
 
     - name: "Service | Genstart Veeam.Archiver.REST ved throttling-ændring"
       ansible.windows.win_service:
-        name: "Veeam.Archiver.REST.Service"
+        name: "Veeam.Archiver.REST.service"
         state: restarted
       when: result_throttling.changed
 
