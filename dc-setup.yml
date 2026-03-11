@@ -15,7 +15,6 @@
 
   tasks:
     - name: Ensure initial WinRM is reachable
-        # Her bruges inventoriens timeouts
       ansible.windows.win_wait_for:
         port: 5985
         delay: 5
@@ -33,7 +32,7 @@
         name: AD-Domain-Services
         include_management_tools: yes
         state: present
-      async: 900 # Max 15 minutes for the task to run
+      async: 900 
       poll: 30
       register: feature_result
       

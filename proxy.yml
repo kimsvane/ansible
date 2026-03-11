@@ -1,6 +1,6 @@
 ---
   - name: Setup proxy
-    hosts: proxies   # <-- matcher inventory-gruppen ovenfor
+    hosts: proxies 
     gather_facts: no
     become: no
 

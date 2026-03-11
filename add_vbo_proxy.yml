@@ -1,11 +1,11 @@
 ---
   - name: Register Linux Proxy in Veeam Backup for Microsoft 365
-    hosts: controller   # <-- matcher inventory-gruppen ovenfor
+    hosts: controller 
     gather_facts: no
     become: no
 
     tasks:
-    - name: Tilføj Linux Proxy og tildel pool i Veeam Backup for Microsoft 365
+    - name: Add proxy and pool
       ansible.windows.win_powershell:
         script: |
           Import-Module Veeam.Archiver.PowerShell
@@ -16,29 +16,28 @@
           $pPass = ConvertTo-SecureString -String "{{ proxy_password }}" -AsPlainText -Force
           $LinuxCred = New-VBOLinuxCredential -Account $pUser -ElevateAccountToRoot:$true -Password $pPass
 
-          # Tilføj proxy hvis den ikke eksisterer
           $proxy = Get-VBOProxy | Where-Object { $_.Hostname -eq $proxyHostname }
           if (!$proxy) {
               $proxy = Add-VBOProxy -Hostname $proxyHostname -Port {{ proxy_port }} -LinuxCredential $LinuxCred -Force
-              Write-Host "Proxy $proxyHostname er tilføjet."
+              Write-Host "Proxy $proxyHostname added."
           } else {
-              Write-Host "Proxy $proxyHostname eksisterer allerede."
+              Write-Host "Proxy $proxyHostname already exists."
           }
 
           # Opret pool hvis den ikke eksisterer
           $pool = Get-VBOProxyPool | Where-Object { $_.Name -eq $poolName }
           if (!$pool) {
               $pool = Add-VBOProxyPool -Name $poolName -Proxies $proxy
-              Write-Host "Pool $poolName oprettet med proxy $proxyHostname."
+              Write-Host "Pool $poolName created with proxy $proxyHostname."
           } else {
-              # Tilføj proxy til pool hvis den ikke allerede er medlem
+              
               $memberExists = $pool.Proxies | Where-Object { $_.Hostname -eq $proxyHostname }
               if (!$memberExists) {
                   $updatedProxies = @($pool.Proxies) + $proxy
                   Set-VBOProxyPool -Pool $pool -Proxies $updatedProxies
-                  Write-Host "Proxy $proxyHostname tilføjet til pool $poolName."
+                  Write-Host "Proxy $proxyHostname added to pool $poolName."
               } else {
-                  Write-Host "Proxy $proxyHostname er allerede medlem af pool $poolName."
+                  Write-Host "Proxy $proxyHostname is already a member of pool $poolName."
               }
           }
       register: add_proxy_result

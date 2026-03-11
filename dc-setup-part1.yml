@@ -49,14 +49,6 @@
       debug:
         var: disk_space.stdout_lines
 
-    # - name: Install AD-DS features with verbose logging
-    #   ansible.windows.win_shell: |
-    #     Start-Transcript -Path "C:\Logs\feature-install.log" -Append
-    #     Install-WindowsFeature -Name AD-Domain-Services,RSAT-ADDS -IncludeManagementTools -Verbose
-    #     Stop-Transcript
-    #   async: 3600
-    #   poll: 30
-    #   register: install_result
 
     - name: Install AD using DISM
       ansible.windows.win_shell: |
@@ -111,38 +103,7 @@
       when: reboot_check.stdout | trim == "true"
       register: reboot_result
       
-
-    # - name: Wait for Netlogon to be running
-    #   ansible.windows.win_service:
-    #       name: Netlogon
-    #   register: netlogon_status
-    #   until: netlogon_status.state == "running"
-    #   retries: 30
-    #   delay: 10
-
-    # - name: Wait for AD to respond
-    #   ansible.windows.win_shell: |
-    #     try {
-    #       Get-ADDomain | Out-Null
-    #       Write-Output "ready"
-    #     } catch {
-    #       Write-Output "notready"
-    #     }
-    #   register: ad_ready
-    #   until: ad_ready.stdout | trim == "ready"
-    #   retries: 30
-    #   delay: 10
-      
-    # - name: Verify AD DS feature is installed
-    #   ansible.windows.win_shell: |
-    #     $feature = Get-WindowsFeature -Name AD-Domain-Services
-    #     if ($feature.Installed -eq $true) {
-    #       "AD-DS is installed"
-    #     } else {
-    #       throw "AD-DS installation failed"
-    #     }
-    #   register: verify_feature
-      
+   
     - name: Completion message
       ansible.builtin.debug:
         msg: "Part 1 completed successfully. AD-DS features are installed. Ready for domain promotion."

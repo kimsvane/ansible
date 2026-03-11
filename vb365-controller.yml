@@ -14,14 +14,7 @@
     vb365_retention_weeks: 52
     vb365_config_file:     "C:\\ProgramData\\Veeam\\Backup365\\Config.xml"
 
-    # Disse variabler forventes fra Terraform-genereret fil
-    # postgres_host: "{{ postgres_host }}"
-    # postgres_port: "{{ postgres_port | default(5432) }}"
-    # postgres_database: "{{ postgres_database }}"
-    # postgres_user: "{{ postgres_user }}"
-    # postgres_password: "{{ postgres_password }}"
-    # nats_host: "{{ nats_host }}"
-    # nats_port: "{{ nats_port | default(4222) }}"
+
   collections:
     - community.windows
     - ansible.windows
@@ -168,8 +161,6 @@
         Test-NetConnection -ComputerName {{ nats.host }} -Port {{ nats.port | default(4222) }}
       register: nats_check
 
-##################################################
-
 
     - name: Check if reboot is required
       ansible.windows.win_shell: |
@@ -308,7 +299,7 @@
         path: "{{ vb365_temp_folder }}"
         state: directory
 
-    - name: "Temp-mappe | Sæt VB365 til at bruge {{ vb365_temp_folder }}"
+    - name: "Temp-mappe | Set VB365 to use {{ vb365_temp_folder }}"
       ansible.windows.win_powershell:
         script: |
           Import-Module Veeam.Archiver.PowerShell -ErrorAction Stop
@@ -322,10 +313,8 @@
       register: result_temp
       changed_when: "'CHANGED' in (result_temp.output | join(''))"
 
-    # ── 2. Session history retention: 52 uger ──────────────
-    # Cmdlet: Set-VBOHistorySettings -KeepOnlyLastXweeks
-    # Ref: helpcenter.veeam.com/docs/vbo365/powershell/set-vbohistorysettings.html
-    - name: "Retention | Sæt job session history til {{ vb365_retention_weeks }} uger"
+
+    - name: "Retention | Set job session history to {{ vb365_retention_weeks }} weeks"
       ansible.windows.win_powershell:
         script: |
           Import-Module Veeam.Archiver.PowerShell -ErrorAction Stop
@@ -339,14 +328,13 @@
       register: result_retention
       changed_when: "'CHANGED' in (result_retention.output | join(''))"
 
-    # ── 3. WCF OperationTimeout i Archiver-config ──────────
-    - name: "Config | Tag backup af konfigurationsfilen"
+    - name: "Config | Make backup of configuration file"
       ansible.windows.win_copy:
         src: "{{ vb365_config_file }}"
         dest: "{{ vb365_config_file }}.bak_{{ ansible_date_time.date }}"
         remote_src: true
 
-    - name: "Config | Indsæt <WCF OperationTimeout='2400' /> i Archiver-sektionen"
+    - name: "Config | Insert <WCF OperationTimeout='2400' /> in Archiver section"
       ansible.windows.win_powershell:
         script: |
           $configPath = "{{ vb365_config_file }}"
@@ -374,8 +362,7 @@
           }
       register: result_wcf
       changed_when: "'CHANGED' in (result_wcf.output | join(''))"
-# ── 5. Aktiver REST API med self-signed certifikat ─────
-    - name: "REST API | Aktiver med self-signed certifikat"
+    - name: "REST API | Activate with self-signed certificate"
       ansible.windows.win_powershell:
         script: |
           Import-Module Veeam.Archiver.PowerShell -ErrorAction Stop
@@ -386,7 +373,6 @@
               exit
           }
 
-          # Generér self-signed certifikat (gyldigt i 10 år)
           $hostname = $env:COMPUTERNAME
           $cert = New-SelfSignedCertificate `
               -Subject "CN=$hostname" `
@@ -396,7 +382,6 @@
               -NotAfter (Get-Date).AddYears(10) `
               -FriendlyName "Veeam VB365 REST API"
 
-          # Eksportér til PFX så Set-VBORestAPISettings kan indlæse den
           $pw        = ConvertTo-SecureString "TempCertPw!1" -AsPlainText -Force
           $certFile  = "C:\Windows\Temp\vb365_rest_selfsigned.pfx"
           Export-PfxCertificate -Cert $cert -FilePath $certFile -Password $pw | Out-Null
@@ -413,8 +398,7 @@
       register: result_rest_api
       changed_when: "'CHANGED' in (result_rest_api.output | join(''))"
 
-    # ── 6. Vent på at REST-servicen er oppe ───────────────
-    - name: "REST API | Vent på Veeam.Archiver.REST service"
+    - name: "REST API | Wait for Veeam.Archiver.REST service"
       ansible.windows.win_service:
         name: "Veeam.Archiver.REST.service"
         state: started
@@ -422,26 +406,25 @@
       when: result_rest_api.changed
 
     # ── 7. Tilføj <Throttling> som child i <Rest>-noden ──
-    - name: "Config | Konvertér <Rest .../> og indsæt <Throttling> som separat blok"
+    - name: "Config | Convert <Rest .../> and insert <Throttling> as separate block"
       ansible.windows.win_powershell:
         script: |
           $configPath = "{{ vb365_config_file }}"
           $content = Get-Content $configPath -Raw -Encoding UTF8
 
-          # Allerede migreret?
-          if ($content -match '<Throttling') {
-              Write-Output "OK"
-              exit
+
+          if ($content -match '<Rest\s+Enable=[^>]+>') {
+          Write-Output "OK"
+          exit
           }
 
-          # Find den self-closing Rest-tag og skær />" fra enden
-          # Erstat afsluttende /> med >, tilføj Throttling-child, luk med </Rest>
+
           $throttling = '        <Throttling EndpointAnonymousPerSecond="1000" EndpointAnonymousPerMinute="6000" EndpointAnonymousPerHour="150000" />'
 
-          $new = $content -replace '(<Rest\s[^>]+)/>', "`$1>`r`n$throttling`r`n      </Rest>"
+          $new = $content -replace '(<Rest\s+Enable=[^>]+)/>', "`$1>`r`n$throttling`r`n      </Rest>"
 
           if ($new -eq $content) {
-              Write-Output "SKIP: Ingen self-closing <Rest />-node fundet"
+              Write-Output "SKIP: No self-closing <Rest />-node found"
               exit
           }
 
@@ -450,7 +433,7 @@
       register: result_throttling
       changed_when: "'CHANGED' in (result_throttling.output | join(''))"
 
-    - name: "Service | Genstart Veeam.Archiver.REST ved throttling-ændring"
+    - name: "Service | Restart Veeam.Archiver.REST on throttling change"
       ansible.windows.win_service:
         name: "Veeam.Archiver.REST.service"
         state: restarted
@@ -460,7 +443,7 @@
   # POST-TASKS: Verificering
   # ──────────────────────────────────────────────────────────
   post_tasks:
-    - name: "Verificer | Vis aktuel VB365 konfiguration"
+    - name: "Verify | Show current VB365 configuration values"
       ansible.windows.win_powershell:
         script: |
           Import-Module Veeam.Archiver.PowerShell -ErrorAction Stop
@@ -468,7 +451,7 @@
           Write-Output "Session retention : $((Get-VBOHistorySettings).KeepOnlyLastXweeks) uger"
       register: verify_output
 
-    - name: "Verificer | Udskriv status"
+    - name: "Verify | Print status"
       ansible.builtin.debug:
         msg: "{{ verify_output.output }}"
     - name: Ensure temp directory exists
@@ -510,7 +493,7 @@
       register: sidecar_service_info
 
     - name: Install Graylog Sidecar as Windows service
-      # creates: virker kun på filsystem-stier, ikke registry – tjekkes via win_service_info i stedet
+
       ansible.windows.win_command:
         cmd: '"{{ sidecar_install_dir }}\graylog-sidecar.exe" -service install'
       when: not sidecar_service_info.exists
