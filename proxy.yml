@@ -33,3 +33,59 @@
         line: "exclude=dotnet*"
         regexp: "^exclude=dotnet"
         state: present
+
+    - name: Install EPEL repository
+      ansible.builtin.dnf:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+        state: present
+        disable_gpg_check: true
+
+    # - name: Install Glances
+    #   ansible.builtin.dnf:
+    #     name: glances
+    #     state: present
+
+    - name: Install Zabbix Agent 7.2.3
+      ansible.builtin.dnf:
+        name: https://repo.zabbix.com/zabbix/7.2/stable/rhel/9/x86_64/zabbix-agent-7.2.3-release1.el9.x86_64.rpm
+        state: present
+        disable_gpg_check: true
+
+    - name: Install firewalld
+      ansible.builtin.dnf:
+        name: firewalld
+        state: present
+
+    - name: Ensure firewalld is running
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Open port 9193/tcp (permanent)
+      ansible.posix.firewalld:
+        port: 9193/tcp
+        permanent: true
+        state: enabled
+
+    - name: Open ports 6160-6162/tcp (permanent)
+      ansible.posix.firewalld:
+        port: "{{ item }}/tcp"
+        permanent: true
+        state: enabled
+      loop:
+        - 6160
+        - 6161
+        - 6162
+
+    - name: Open Zabbix Agent port 10050/tcp in public zone (permanent)
+      ansible.posix.firewalld:
+        port: 10050/tcp
+        zone: public
+        permanent: true
+        state: enabled
+
+    - name: Reload firewalld
+      ansible.builtin.service:
+        name: firewalld
+        state: reloaded
