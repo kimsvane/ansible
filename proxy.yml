@@ -5,7 +5,11 @@
     become: no
 
     tasks:
-
+    - name: Lock RHEL release version to 9.6
+      ansible.builtin.command:
+        cmd: subscription-manager release --set=9.6
+      register: release_lock
+      changed_when: "'Release set to' in release_lock.stdout"
 
     - name: Installer .NET Runtime 8.0
       ansible.builtin.dnf:
