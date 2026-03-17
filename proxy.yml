@@ -12,3 +12,24 @@
         name: dotnet-runtime-8.0
         state: present
 
+    - name: Ensure dnf-plugin-core (versionlock) is installed
+      ansible.builtin.dnf:
+        name: python3-dnf-plugin-versionlock
+        state: present
+
+    - name: Lock dotnet-runtime-8.0 version
+      community.general.dnf_versionlock:
+        name: dotnet-runtime-8.0
+        state: present
+
+    - name: Lock dotnet-sdk-8.0 version (if present)
+      community.general.dnf_versionlock:
+        name: dotnet-sdk-8.0
+        state: present
+
+    - name: Prevent accidental .NET updates via dnf.conf
+      ansible.builtin.lineinfile:
+        path: /etc/dnf/dnf.conf
+        line: "exclude=dotnet*"
+        regexp: "^exclude=dotnet"
+        state: present
