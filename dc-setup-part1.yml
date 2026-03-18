@@ -11,24 +11,24 @@
       ansible.windows.win_timezone:
         timezone: "UTC"
 
-    - name: Get PDC Emulator
-      ansible.windows.win_shell: |
-        (Get-ADDomain).PDCEmulator
-      register: pdc_result
+    # - name: Get PDC Emulator
+    #   ansible.windows.win_shell: |
+    #     (Get-ADDomain).PDCEmulator
+    #   register: pdc_result
 
-    - name: Set fact for PDC
-      set_fact:
-        is_pdc: "{{ (inventory_hostname | lower) in (pdc_result.stdout | lower) }}"
+    # - name: Set fact for PDC
+    #   set_fact:
+    #     is_pdc: "{{ (inventory_hostname | lower) in (pdc_result.stdout | lower) }}"
 
-    - name: Configure NTP on PDC Emulator
-      ansible.windows.win_shell: |
-        w32tm /config /manualpeerlist:"{{ ntp_servers }}" /syncfromflags:manual /reliable:yes /update
-      when: is_pdc
+    # - name: Configure NTP on PDC Emulator
+    #   ansible.windows.win_shell: |
+    #     w32tm /config /manualpeerlist:"{{ ntp_servers }}" /syncfromflags:manual /reliable:yes /update
+    #   when: is_pdc
 
-    - name: Configure domain hierarchy sync on other DCs
-      ansible.windows.win_shell: |
-        w32tm /config /syncfromflags:domhier /update
-      when: not is_pdc
+    # - name: Configure domain hierarchy sync on other DCs
+    #   ansible.windows.win_shell: |
+    #     w32tm /config /syncfromflags:domhier /update
+    #   when: not is_pdc
 
     - name: Restart Windows Time service
       ansible.windows.win_service:
