@@ -3,8 +3,41 @@
   hosts: dc
   vars:
     dc_password: "{{ dc_password }}"
+    ntp_servers: "0.dk.pool.ntp.org 1.dk.pool.ntp.org 2.dk.pool.ntp.org"
   gather_facts: no
   tasks:
+
+    - name: Ensure timezone is UTC
+      ansible.windows.win_timezone:
+        timezone: "UTC"
+
+    - name: Get PDC Emulator
+      ansible.windows.win_shell: |
+        (Get-ADDomain).PDCEmulator
+      register: pdc_result
+
+    - name: Set fact for PDC
+      set_fact:
+        is_pdc: "{{ (inventory_hostname | lower) in (pdc_result.stdout | lower) }}"
+
+    - name: Configure NTP on PDC Emulator
+      ansible.windows.win_shell: |
+        w32tm /config /manualpeerlist:"{{ ntp_servers }}" /syncfromflags:manual /reliable:yes /update
+      when: is_pdc
+
+    - name: Configure domain hierarchy sync on other DCs
+      ansible.windows.win_shell: |
+        w32tm /config /syncfromflags:domhier /update
+      when: not is_pdc
+
+    - name: Restart Windows Time service
+      ansible.windows.win_service:
+        name: w32time
+        state: restarted
+
+    - name: Force time resync
+      ansible.windows.win_shell: |
+        w32tm /resync /force
 
     - name: Ensure initial WinRM is reachable
       ansible.windows.win_wait_for:
