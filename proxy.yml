@@ -106,3 +106,9 @@
       ansible.builtin.service:
         name: firewalld
         state: reloaded
+
+    - name: Install Level.io agent
+      shell: |
+        curl -L https://downloads.level.io/install_linux.sh | \
+        LEVEL_API_KEY={{ level_io_api_key }} bash
+      when: not level_agent.stat.exists

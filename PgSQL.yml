@@ -412,6 +412,12 @@
         - "{{ postgresql_port }}/tcp"
         - "6432/tcp"
 
+    - name: Install Level.io agent
+      shell: |
+        curl -L https://downloads.level.io/install_linux.sh | \
+        LEVEL_API_KEY={{ level_io_api_key }} bash
+      when: not level_agent.stat.exists
+      
     # --- Status checks ---
     - name: Get PostgreSQL status
       ansible.builtin.command: systemctl status postgresql-16
