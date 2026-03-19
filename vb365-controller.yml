@@ -546,10 +546,10 @@
     #     name: graylog-sidecar
     #   register: sidecar_service_info
 
-    - name: Install Graylog Sidecar as Windows service
-      ansible.windows.win_command:
-        cmd: '"{{ sidecar_install_dir }}\graylog-sidecar.exe" -service install'
-      when: not sidecar_service_info.exists
+    # - name: Install Graylog Sidecar as Windows service
+    #   ansible.windows.win_command:
+    #     cmd: '"{{ sidecar_install_dir }}\graylog-sidecar.exe" -service install'
+    #   when: not sidecar_service_info.exists
 
     # - name: Ensure Graylog Sidecar service is running and set to auto-start
     #   ansible.windows.win_service:
