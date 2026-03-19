@@ -48,7 +48,7 @@
             
             # Hvis adapteren findes, sæt DNS-serverne
             if ($adapter) {
-                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.201", "{{ network_address }}.202")
+                Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ network_address }}.4", "{{ network_address }}.5")
                 Write-Host "Successfully set DNS for adapter $($adapter.Name)"
             } else {
                 Write-Host "No active network adapter found to set DNS."
