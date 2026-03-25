@@ -93,11 +93,11 @@
       register: dc_promotion
 
 
-    - name: Install Level.io agent
-      win_package:
-        path: https://downloads.level.io/level.msi
-        arguments: "LEVEL_API_KEY={{ level_io_api_key }}"
-        state: present
+    # - name: Install Level.io agent
+    #   win_package:
+    #     path: https://downloads.level.io/level.msi
+    #     arguments: "LEVEL_API_KEY={{ level_io_api_key }}"
+    #     state: present
 
     - name: Reboot after DC promotion
       ansible.windows.win_reboot:
