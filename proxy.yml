@@ -49,9 +49,16 @@
     #     name: glances
     #     state: present
 
-    - name: Install Zabbix 7.2 repository
-      ansible.builtin.dnf:
-        name: https://repo.zabbix.com/zabbix/7.2/stable/rhel/9/x86_64/zabbix-release-7.2-1.el9.noarch.rpm
+
+    - name: Download Zabbix release RPM
+      get_url:
+        url: https://repo.zabbix.com/zabbix/7.2/stable/rhel/9/x86_64/zabbix-release-7.2-1.el9.noarch.rpm
+        dest: /tmp/zabbix-release.rpm
+        mode: '0644'
+
+    - name: Install Zabbix release RPM
+      dnf:
+        name: /tmp/zabbix-release.rpm
         state: present
         disable_gpg_check: true
 
