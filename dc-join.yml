@@ -29,6 +29,57 @@
             Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ("{{ domain_controller }}", "127.0.0.1")
             Write-Host "DNS configured for $($adapter.Name)"
         }
+    - name: Disable LSA PPL (RunAsPPL) before domain join
+      ansible.windows.win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+        name: RunAsPPL
+        data: 0
+        type: dword
+        state: present
+
+    - name: Disable Credential Guard (LsaCfgFlags)
+      ansible.windows.win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+        name: LsaCfgFlags
+        data: 0
+        type: dword
+        state: present
+
+    - name: Disable VBS / DeviceGuard
+      ansible.windows.win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard
+        name: EnableVirtualizationBasedSecurity
+        data: 0
+        type: dword
+        state: present
+
+    - name: Disable DeviceGuard platform security requirement
+      ansible.windows.win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard
+        name: RequirePlatformSecurityFeatures
+        data: 0
+        type: dword
+        state: present
+
+    - name: Disable HVCI (Memory Integrity)
+      ansible.windows.win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity
+        name: Enabled
+        data: 0
+        type: dword
+        state: present
+
+
+    - name: Disable DeviceGuard via Policies hive (GPO override)
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+        name: "{{ item.name }}"
+        data: 0
+        type: dword
+        state: present
+      loop:
+        - { name: EnableVirtualizationBasedSecurity }
+        - { name: LsaCfgFlags }
 
     - name: Install AD using DISM
       ansible.windows.win_shell: |
