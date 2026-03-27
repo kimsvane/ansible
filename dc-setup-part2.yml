@@ -16,9 +16,9 @@
         create_dns_delegation: false
         database_path: C:\Windows\NTDS
         dns_domain_name: "{{ domain_name }}"
-        domain_mode: Win2025
+        domain_mode: WinThreshold
         domain_netbios_name: "{{ netbios }}"
-        forest_mode: Win2025
+        forest_mode: WinThreshold
         safe_mode_password: "{{ recovery_password }}"
         sysvol_path: C:\Windows\SYSVOL
         reboot: true
