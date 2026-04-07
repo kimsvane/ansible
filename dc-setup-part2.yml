@@ -38,4 +38,30 @@
         value: "{{ postgres_ip }}"
         zone: "{{ domain_name }}"
 
+    - name: Wait for DNS service to be ready
+      ansible.windows.win_service:
+        name: DNS
+        state: started
+      register: dns_service
+      retries: 10
+      delay: 15
+      until: dns_service is succeeded
+
+    - name: Configure DNS forwarders
+      ansible.windows.win_shell: |
+        $desired = @("1.1.1.1","8.8.8.8")
+        $current = (Get-DnsServerForwarder).IPAddress
+
+        if (-not $current -or (@($current) -ne $desired)) {
+            Set-DnsServerForwarder -IPAddress $desired -PassThru
+        } else {
+            Write-Output "Forwarders already correct"
+        }
+    - name: Verify DNS forwarders
+      ansible.windows.win_shell: |
+        Get-DnsServerForwarder | Select-Object IPAddress
+      register: dns_forwarders
+
+    - debug:
+        var: dns_forwarders.stdout_lines
  
