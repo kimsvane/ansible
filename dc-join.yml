@@ -19,7 +19,8 @@
       register: admin_pw_result
       retries: 3
       delay: 10
-      until: set_password is not failed
+      until: admin_pw_result is defined and admin_pw_result.failed is defined and not admin_pw_result.failed
+
       
 
     - name: Configure DNS to point to primary DC
