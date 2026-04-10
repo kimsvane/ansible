@@ -18,6 +18,24 @@
 
   tasks:
 
+    - name: Find target data disk by size
+      ansible.builtin.shell: |
+        lsblk -bnd -o NAME,SIZE | awk '$2 == {{ pgsql_data_disk_size_gb * 1024 * 1024 * 1024 }} {print "/dev/" $1}'
+      register: detected_disk
+      when: pgsql_data_disk == ""
+
+    - name: Set pgsql_data_disk from detected disk
+      ansible.builtin.set_fact:
+        pgsql_data_disk: "{{ detected_disk.stdout | trim }}"
+      when: pgsql_data_disk == ""
+
+    - name: Fail if no disk detected
+      ansible.builtin.fail:
+        msg: "Could not find a disk of {{ pgsql_data_disk_size_gb }}GB. lsblk output: {{ detected_disk.stdout }}"
+      when:
+        - pgsql_data_disk == ""
+        - detected_disk is not skipped
+        - detected_disk.stdout | trim == ""
 
     - name: Check if data disk exists
       ansible.builtin.stat:
