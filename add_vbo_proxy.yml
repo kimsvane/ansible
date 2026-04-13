@@ -40,6 +40,7 @@
                   Write-Host "Proxy $proxyHostname is already a member of pool $poolName."
               }
           }
+      throttle: 2    
       register: add_proxy_result
 
     - name: Result of adding proxy
