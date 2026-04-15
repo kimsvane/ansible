@@ -105,6 +105,18 @@
         - { name: EnableVirtualizationBasedSecurity }
         - { name: LsaCfgFlags }
 
+
+    - name: Set hostname
+      ansible.windows.win_hostname:
+        name: "controller"
+      register: hostname_change
+
+
+    - name: Reboot after hostname change
+      ansible.windows.win_reboot:
+        reboot_timeout: 1200
+      when: hostname_change.reboot_required
+
     - name: Join domain
       microsoft.ad.membership:
         dns_domain_name: "{{ domain }}"
