@@ -2,7 +2,8 @@
   hosts: all
   vars:
     vb365_version: "8.2.0.2202"
-    vb365_iso_url: "https://download2.veeam.com/VBO/v8/VeeamBackupMicrosoft365_8.2.0.2202.iso"
+    #vb365_iso_url: "https://download2.veeam.com/VBO/v8/VeeamBackupMicrosoft365_8.2.0.2202.iso"
+    vb365_iso_url: "https://download2.veeam.com/VBO/v8/VeeamBackupMicrosoft365_8.4.0.1457.iso"
     vb365_iso_filename: "VeeamBackupMicrosoft365_8.2.0.2202.iso"
     vb365_iso_path: "C:\\{{ vb365_iso_filename }}"
     temp_dir: 'C:\Temp'
