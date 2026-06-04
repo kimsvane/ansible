@@ -94,8 +94,8 @@
     - name: Install PostgreSQL 16 and dependencies
       ansible.builtin.dnf:
         name:
-          - postgresql16-server-16.6
-          - postgresql16-contrib-16.6
+          - postgresql16-server      # Removed "-16.6"
+          - postgresql16-contrib     # Removed "-16.6"
           - pgbouncer
           - python3-psycopg2
         state: present
@@ -116,13 +116,6 @@
         state: directory
         mode: '0755'
 
-    - name: Set PGDATA i systemd override
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/postgresql-16.service.d/override.conf
-        content: |
-          [Service]
-          Environment=PGDATA={{ pgsql_mount_point }}/data
-      notify: restart postgresql
 
     - name: Reload systemd daemon
       ansible.builtin.systemd:
@@ -140,6 +133,14 @@
       environment:
         PGSETUP_INITDB_OPTIONS: "--data-checksums"
         PGDATA: "{{ pgsql_mount_point }}/data"
+
+    - name: Set PGDATA i systemd override
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/postgresql-16.service.d/override.conf
+        content: |
+          [Service]
+          Environment=PGDATA={{ pgsql_mount_point }}/data
+      notify: restart postgresql
 
     - name: Start and enable PostgreSQL
       ansible.builtin.systemd:
