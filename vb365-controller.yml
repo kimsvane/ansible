@@ -258,7 +258,7 @@
     #   ansible.windows.win_file:
     #     path: 'C:\Temp\ODT'
     #     state: absent
-    - name: Download VB365 v8.2 installer
+    - name: Download VB365 ISO
       ansible.windows.win_get_url:
         url: "{{ vb365_iso_url }}"
         dest: "{{ vb365_iso_path }}"
@@ -319,9 +319,57 @@
       ansible.builtin.set_fact:
         redistr_path: "{{ disk_image_out.mount_paths[0] }}Redistr"
 
+    - name: Find .NET Runtime installer
+      ansible.windows.win_find:
+        paths: "{{ redistr_path }}"
+        patterns:
+          - "dotnet-runtime-*-win-x64.exe"
+      register: dotnet_runtime
+
+    - name: Find ASP.NET Runtime installer
+      ansible.windows.win_find:
+        paths: "{{ redistr_path }}"
+        patterns:
+          - "aspnetcore-runtime-*-win-x64.exe"
+      register: aspnet_runtime
+
+    - name: Find Desktop Runtime installer
+      ansible.windows.win_find:
+        paths: "{{ redistr_path }}"
+        patterns:
+          - "windowsdesktop-runtime-*-win-x64.exe"
+      register: desktop_runtime
+
+    - name: Find PowerShell installer
+      ansible.windows.win_find:
+        paths: "{{ redistr_path }}"
+        patterns:
+          - "PowerShell-*-win-x64.msi"
+      register: powershell_installer
+
+    - name: Verify .NET Runtime installer
+      ansible.builtin.assert:
+        that:
+          - dotnet_runtime.files | length == 1
+
+    - name: Verify ASP.NET Runtime installer
+      ansible.builtin.assert:
+        that:
+          - aspnet_runtime.files | length == 1
+
+    - name: Verify Desktop Runtime installer
+      ansible.builtin.assert:
+        that:
+          - desktop_runtime.files | length == 1
+
+    - name: Verify PowerShell installer
+      ansible.builtin.assert:
+        that:
+          - powershell_installer.files | length == 1
+
     - name: Install .NET Runtime
       ansible.windows.win_package:
-        path: "{{ redistr_path }}\\dotnet-runtime-8.0.17-win-x64.exe"
+        path: "{{ dotnet_runtime.files[0].path }}"
         arguments: "/install /quiet /norestart"
         state: present
       async: 1800
@@ -329,7 +377,7 @@
 
     - name: Install ASP.NET Runtime
       ansible.windows.win_package:
-        path: "{{ redistr_path }}\\aspnetcore-runtime-8.0.17-win-x64.exe"
+        path: "{{ aspnet_runtime.files[0].path }}"
         arguments: "/quiet /norestart"
         state: present
       async: 1800
@@ -337,8 +385,16 @@
 
     - name: Install Desktop Runtime
       ansible.windows.win_package:
-        path: "{{ redistr_path }}\\windowsdesktop-runtime-8.0.17-win-x64.exe"
+        path: "{{ desktop_runtime.files[0].path }}"
         arguments: "/quiet /norestart"
+        state: present
+      async: 1800
+      poll: 30
+
+    - name: Install PowerShell 7
+      ansible.windows.win_package:
+        path: "{{ powershell_installer.files[0].path }}"
+        arguments: "/qn ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1"
         state: present
       async: 1800
       poll: 30
@@ -361,13 +417,7 @@
       when: vcredist_installed.value != 1
 
 
-    - name: Install PowerShell 7
-      ansible.windows.win_package:
-        path: "{{ redistr_path }}\\PowerShell-7.4.2-win-x64.msi"
-        arguments: "/qn ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1"
-        state: present
-      async: 1800
-      poll: 30
+
 
     - name: Wait for host after prereqs
       ansible.builtin.wait_for_connection:
