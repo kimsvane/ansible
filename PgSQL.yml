@@ -94,8 +94,8 @@
     - name: Install PostgreSQL 16 and dependencies
       ansible.builtin.dnf:
         name:
-          - postgresql16-server      # Removed "-16.6"
-          - postgresql16-contrib     # Removed "-16.6"
+          - postgresql16-server-16.4
+          - postgresql16-contrib-16.4     # Removed "-16.6"
           - pgbouncer
           - python3-psycopg2
         state: present
