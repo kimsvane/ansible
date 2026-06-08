@@ -26,6 +26,11 @@
       register: dnf_upgrade
       changed_when: "'Nothing to do' not in dnf_upgrade.stdout"
 
+    - name: Permanently disable EUS repositories
+      ansible.builtin.shell: dnf config-manager --disable '*eus*'
+      changed_when: true
+      ignore_errors: yes
+
     - name: Find target data disk by size
       ansible.builtin.shell: |
         lsblk -bnd -o NAME,SIZE | awk '$2 == {{ pgsql_data_disk_size_gb * 1024 * 1024 * 1024 }} {print "/dev/" $1}'
