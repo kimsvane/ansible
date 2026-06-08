@@ -17,15 +17,15 @@
         state: restarted
 
   tasks:
-    - name: Set RHEL release to 9.7
-      ansible.builtin.command: subscription-manager release --set 9.7
+    - name: Unset RHEL release lock
+      ansible.builtin.command: subscription-manager release --unset
       changed_when: true
 
-    - name: Upgrade all packages to RHEL 9.7
+    - name: Upgrade all packages to RHEL 9.8
       ansible.builtin.dnf:
         name: '*'
         state: latest
-        
+
     - name: Find target data disk by size
       ansible.builtin.shell: |
         lsblk -bnd -o NAME,SIZE | awk '$2 == {{ pgsql_data_disk_size_gb * 1024 * 1024 * 1024 }} {print "/dev/" $1}'
