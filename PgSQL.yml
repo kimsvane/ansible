@@ -17,7 +17,18 @@
         state: restarted
 
   tasks:
+    - name: Update OpenSSL to latest
+      ansible.builtin.dnf:
+        name: openssl
+        state: latest
+      register: openssl_update
 
+    - name: Update crypto libraries
+      ansible.builtin.dnf:
+        name:
+          - openssl-libs
+          - openssl-devel
+        state: latest
     - name: Find target data disk by size
       ansible.builtin.shell: |
         lsblk -bnd -o NAME,SIZE | awk '$2 == {{ pgsql_data_disk_size_gb * 1024 * 1024 * 1024 }} {print "/dev/" $1}'
