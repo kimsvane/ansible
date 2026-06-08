@@ -17,18 +17,15 @@
         state: restarted
 
   tasks:
-    - name: Update OpenSSL to latest
-      ansible.builtin.dnf:
-        name: openssl
-        state: latest
-      register: openssl_update
+    - name: Set RHEL release to 9.7
+      ansible.builtin.command: subscription-manager release --set 9.7
+      changed_when: true
 
-    - name: Update crypto libraries
+    - name: Upgrade all packages to RHEL 9.7
       ansible.builtin.dnf:
-        name:
-          - openssl-libs
-          - openssl-devel
+        name: '*'
         state: latest
+        
     - name: Find target data disk by size
       ansible.builtin.shell: |
         lsblk -bnd -o NAME,SIZE | awk '$2 == {{ pgsql_data_disk_size_gb * 1024 * 1024 * 1024 }} {print "/dev/" $1}'
