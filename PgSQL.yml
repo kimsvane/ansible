@@ -17,19 +17,6 @@
         state: restarted
 
   tasks:
-    # - name: Unset RHEL release lock
-    #   ansible.builtin.command: subscription-manager release --unset
-    #   changed_when: true
-
-    # - name: Upgrade all packages to RHEL 9.8
-    #   ansible.builtin.shell: dnf -y upgrade --disablerepo='*eus*'
-    #   register: dnf_upgrade
-    #   changed_when: "'Nothing to do' not in dnf_upgrade.stdout"
-
-    # - name: Permanently disable EUS repositories
-    #   ansible.builtin.shell: dnf config-manager --disable '*eus*'
-    #   changed_when: true
-    #   ignore_errors: yes
 
     - name: Find target data disk by size
       ansible.builtin.shell: |
@@ -108,7 +95,7 @@
       ansible.builtin.dnf:
         name:
           - postgresql16-server
-         # - postgresql16-contrib
+          #- postgresql16-contrib
           - pgbouncer
           - python3-psycopg2
         state: present
