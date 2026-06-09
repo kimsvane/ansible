@@ -153,6 +153,7 @@
         state: started
         enabled: yes
         daemon_reload: yes
+      no_log: true
 
     # --- PostgreSQL konfiguration ---
     - name: Configure PostgreSQL - listen_addresses
@@ -262,10 +263,20 @@
         timeout: 60
 
     # --- Brugere og database ---
+    # - name: Set postgres superuser password
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '{{ postgres_superuser_password }}';"
+    #   no_log: true
     - name: Set postgres superuser password
-      ansible.builtin.shell: |
-        sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '{{ postgres_superuser_password }}';"
-      no_log: true
+      community.postgresql.postgresql_user:
+        db: postgres
+        name: postgres
+        password: "{{ postgres_superuser_password }}"
+        login_host: 127.0.0.1
+        login_user: postgres
+      # we run this as postgres directly instead of nesting su/sudo
+      become: yes
+      become_user: postgres
 
     - name: Check if PgBouncer user exists
       ansible.builtin.shell: |
@@ -273,27 +284,56 @@
       register: pgbouncer_user_exists
       changed_when: false
 
+    # - name: Create dedicated PgBouncer user
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql -c "CREATE USER {{ pgbouncer_db_user }} WITH LOGIN PASSWORD '{{ pgbouncer_db_password }}';"
+    #   when: pgbouncer_user_exists.stdout != "1"
+    #   no_log: true
     - name: Create dedicated PgBouncer user
-      ansible.builtin.shell: |
-        sudo -u postgres psql -c "CREATE USER {{ pgbouncer_db_user }} WITH LOGIN PASSWORD '{{ pgbouncer_db_password }}';"
-      when: pgbouncer_user_exists.stdout != "1"
-      no_log: true
+      community.postgresql.postgresql_user:
+        db: postgres
+        name: "{{ pgbouncer_db_user }}"
+        password: "{{ pgbouncer_db_password }}"
+        login_user: postgres
+      become: yes
+      become_user: postgres
 
+    # - name: Create user_search function for PgBouncer
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql -d postgres -c "
+    #     CREATE OR REPLACE FUNCTION user_search(uname TEXT)
+    #     RETURNS TABLE (usename name, passwd text) AS
+    #     \$\$
+    #       SELECT usename, passwd FROM pg_shadow WHERE usename = \$1;
+    #     \$\$
+    #     LANGUAGE sql SECURITY DEFINER;"
+    #   register: user_search_result
+    #   changed_when: "'CREATE FUNCTION' in user_search_result.stdout"
     - name: Create user_search function for PgBouncer
-      ansible.builtin.shell: |
-        sudo -u postgres psql -d postgres -c "
-        CREATE OR REPLACE FUNCTION user_search(uname TEXT)
-        RETURNS TABLE (usename name, passwd text) AS
-        \$\$
-          SELECT usename, passwd FROM pg_shadow WHERE usename = \$1;
-        \$\$
-        LANGUAGE sql SECURITY DEFINER;"
-      register: user_search_result
-      changed_when: "'CREATE FUNCTION' in user_search_result.stdout"
+      community.postgresql.postgresql_query:
+        db: postgres
+        query: |
+          CREATE OR REPLACE FUNCTION user_search(uname TEXT)
+          RETURNS TABLE (usename name, passwd text) AS
+          $$
+            SELECT usename, passwd FROM pg_shadow WHERE usename = $1;
+          $$
+          LANGUAGE sql SECURITY DEFINER;
+      become: yes
+      become_user: postgres
 
+    # - name: Grant execute on user_search
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql -d postgres -c "GRANT EXECUTE ON FUNCTION user_search(text) TO {{ pgbouncer_db_user }};"
     - name: Grant execute on user_search
-      ansible.builtin.shell: |
-        sudo -u postgres psql -d postgres -c "GRANT EXECUTE ON FUNCTION user_search(text) TO {{ pgbouncer_db_user }};"
+      community.postgresql.postgresql_privs:
+        db: postgres
+        type: function
+        obj: user_search(text)
+        roles: "{{ pgbouncer_db_user }}"
+        privs: EXECUTE
+      become: yes
+      become_user: postgres
 
     - name: Check if Veeam user exists
       ansible.builtin.shell: |
@@ -301,21 +341,38 @@
       register: veeam_user_exists
       changed_when: false
 
+    # - name: Create Veeam admin user
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql -c "CREATE USER {{ veeam_db_user }} WITH PASSWORD '{{ veeam_db_password }}';"
+    #   when: veeam_user_exists.stdout != "1"
+    #   no_log: true
+
     - name: Create Veeam admin user
-      ansible.builtin.shell: |
-        sudo -u postgres psql -c "CREATE USER {{ veeam_db_user }} WITH PASSWORD '{{ veeam_db_password }}';"
-      when: veeam_user_exists.stdout != "1"
-      no_log: true
+      community.postgresql.postgresql_user:
+        db: postgres
+        name: "{{ veeam_db_user }}"
+        password: "{{ veeam_db_password }}"
+        role_attr_flags: "SUPERUSER,CREATEROLE,CREATEDB"
+        login_user: postgres
+      become: yes
+      become_user: postgres
 
     - name: Grant superuser privileges to Veeam user
       ansible.builtin.shell: |
         sudo -u postgres psql -c "ALTER USER {{ veeam_db_user }} WITH SUPERUSER CREATEROLE CREATEDB;"
 
+    # - name: Create VeeamBackup365 database
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='VeeamBackup365'"
+    #   register: veeam_db_exists
+    #   changed_when: false
     - name: Create VeeamBackup365 database
-      ansible.builtin.shell: |
-        sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='VeeamBackup365'"
-      register: veeam_db_exists
-      changed_when: false
+      community.postgresql.postgresql_db:
+        name: VeeamBackup365
+        owner: "{{ veeam_db_user }}"
+        login_user: postgres
+      become: yes
+      become_user: postgres
 
     - name: Create VeeamBackup365 database
       ansible.builtin.shell: |
