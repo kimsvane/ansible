@@ -18,6 +18,22 @@
 
   tasks:
 
+
+
+    - name: Remove any existing subscription-manager release overrides
+      ansible.builtin.command: subscription-manager release --set=9.8
+      changed_when: true
+
+    - name: Update all system packages to the latest minor release 
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_cache: yes
+
+    - name: Reboot after updates if needed
+      ansible.builtin.reboot:
+        reboot_timeout: 600  # Venter op til 10 minutter på at maskinen er oppe
+
     - name: Find target data disk by size
       ansible.builtin.shell: |
         lsblk -bnd -o NAME,SIZE | awk '$2 == {{ pgsql_data_disk_size_gb * 1024 * 1024 * 1024 }} {print "/dev/" $1}'
