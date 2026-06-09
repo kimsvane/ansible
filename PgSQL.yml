@@ -43,49 +43,52 @@
     #   register: data_disk
     #   when: pgsql_data_disk is defined
 
-    - name: Check if data disk exists
-      ansible.builtin.shell: test -b "{{ pgsql_data_disk }}" && echo "exists" || echo "missing"
-      register: data_disk_check
-      changed_when: false
-      when: 
-        - pgsql_data_disk is defined
-        - pgsql_data_disk != ""
+    # - name: Check if data disk exists
+    #   ansible.builtin.shell: test -b "{{ pgsql_data_disk }}" && echo "exists" || echo "missing"
+    #   register: data_disk_check
+    #   changed_when: false
+    #   when: 
+    #     - pgsql_data_disk is defined
+    #     - pgsql_data_disk != ""
 
     - name: Create filesystem on data disk
       ansible.builtin.filesystem:
         fstype: xfs
         dev: "{{ pgsql_data_disk }}"
         opts: -n ftype=1
-      when:
+      when: 
         - pgsql_data_disk is defined
-        - data_disk_check.stdout == "exists"
+        - pgsql_data_disk != ""
 
-    - name: Get UUID of the newly formatted disk
+    - name: Get UUID of the disk
       ansible.builtin.command: "blkid -s UUID -o value {{ pgsql_data_disk }}"
       register: disk_uuid_result
       changed_when: false
       when:
         - pgsql_data_disk is defined
-        - data_disk_check.stdout == "exists"
+        - pgsql_data_disk != ""
 
     - name: Create PostgreSQL mount point
       ansible.builtin.file:
         path: "{{ pgsql_mount_point }}"
         state: directory
         mode: '0755'
-      when: pgsql_data_disk is defined
+      when: 
+        - pgsql_data_disk is defined
+        - pgsql_data_disk != ""
 
     - name: Mount data disk using UUID
       ansible.posix.mount:
         path: "{{ pgsql_mount_point }}"
-        src: "UUID={{ disk_uuid_result.stdout }}"
+        src: "UUID={{ disk_uuid_result.stdout | trim }}"
         fstype: xfs
         opts: defaults,noatime
         state: mounted
       when:
         - pgsql_data_disk is defined
-        - data_disk_check.stdout == "exists"
+        - pgsql_data_disk != ""
         - disk_uuid_result is defined
+        - disk_uuid_result.stdout is defined
 
     # --- Installation ---
     - name: Install PostgreSQL 16 repository
