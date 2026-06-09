@@ -580,19 +580,19 @@
           $configPath = "{{ vb365_config_file }}"
           $content = Get-Content $configPath -Raw -Encoding UTF8
 
-
           if ($content -match '<Rest\s+Enable=[^>]+>') {
-          Write-Output "OK"
-          exit
+              Write-Output "OK"
+              exit
           }
 
-
           $throttling = '        <Throttling EndpointAnonymousPerSecond="1000" EndpointAnonymousPerMinute="6000" EndpointAnonymousPerHour="150000" />'
+          
 
-          $new = $content -replace '(<Rest\s+Enable=[^>]+)/>', "`$1>`r`n$throttling`r`n      </Rest>"
+          $pattern = "(<Rest\s+Enable=[^>]+>)(.*?)(</Rest>)" 
+          $new = $content -replace $pattern, "`$1`r`n$throttling`r`n$2`r`n$3"
 
           if ($new -eq $content) {
-              Write-Output "SKIP: No self-closing <Rest />-node found"
+              Write-Output "SKIP: No Rest structure found to patch."
               exit
           }
 
@@ -600,6 +600,33 @@
           Write-Output "CHANGED"
       register: result_throttling
       changed_when: "'CHANGED' in (result_throttling.output | join(''))"
+
+    # - name: "Config | Convert <Rest .../> and insert <Throttling> as separate block"
+    #   ansible.windows.win_powershell:
+    #     script: |
+    #       $configPath = "{{ vb365_config_file }}"
+    #       $content = Get-Content $configPath -Raw -Encoding UTF8
+
+
+    #       if ($content -match '<Rest\s+Enable=[^>]+>') {
+    #       Write-Output "OK"
+    #       exit
+    #       }
+
+
+    #       $throttling = '        <Throttling EndpointAnonymousPerSecond="1000" EndpointAnonymousPerMinute="6000" EndpointAnonymousPerHour="150000" />'
+
+    #       $new = $content -replace '(<Rest\s+Enable=[^>]+)/>', "`$1>`r`n$throttling`r`n      </Rest>"
+
+    #       if ($new -eq $content) {
+    #           Write-Output "SKIP: No self-closing <Rest />-node found"
+    #           exit
+    #       }
+
+    #       Set-Content -Path $configPath -Value $new -Encoding UTF8 -NoNewline
+    #       Write-Output "CHANGED"
+    #   register: result_throttling
+    #   changed_when: "'CHANGED' in (result_throttling.output | join(''))"
 
     - name: "Service | Restart Veeam.Archiver.REST on throttling change"
       ansible.windows.win_service:
