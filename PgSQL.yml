@@ -73,9 +73,6 @@
         path: "{{ pgsql_mount_point }}"
         state: directory
         mode: '0755'
-      when: 
-        - pgsql_data_disk is defined
-        - pgsql_data_disk != ""
 
     - name: Mount data disk using UUID
       ansible.posix.mount:
@@ -88,7 +85,7 @@
         - pgsql_data_disk is defined
         - pgsql_data_disk != ""
         - disk_uuid_result is defined
-        - disk_uuid_result.stdout is defined
+        - disk_uuid_result.skipped is not defined
 
     # --- Installation ---
     - name: Install PostgreSQL 16 repository
@@ -372,10 +369,10 @@
       become: yes
       become_user: postgres
 
-    - name: Create VeeamBackup365 database
-      ansible.builtin.shell: |
-        sudo -u postgres psql -c "CREATE DATABASE \"VeeamBackup365\" OWNER {{ veeam_db_user }};"
-      when: veeam_db_exists.stdout != "1"
+    # - name: Create VeeamBackup365 database
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql -c "CREATE DATABASE \"VeeamBackup365\" OWNER {{ veeam_db_user }};"
+    #   when: veeam_db_exists.stdout != "1"
 
     # --- PgBouncer ---
     - name: Create PgBouncer configuration directory
