@@ -37,10 +37,16 @@
         - detected_disk is not skipped
         - detected_disk.stdout | trim == ""
 
+    # - name: Check if data disk exists
+    #   ansible.builtin.stat:
+    #     path: "{{ pgsql_data_disk }}"
+    #   register: data_disk
+    #   when: pgsql_data_disk is defined
+
     - name: Check if data disk exists
-      ansible.builtin.stat:
-        path: "{{ pgsql_data_disk }}"
-      register: data_disk
+      ansible.builtin.shell: test -b "{{ pgsql_data_disk }}" && echo "exists" || echo "missing"
+      register: data_disk_check
+      changed_when: false
       when: pgsql_data_disk is defined
 
     - name: Create filesystem on data disk
@@ -50,7 +56,7 @@
         opts: -n ftype=1
       when:
         - pgsql_data_disk is defined
-        - data_disk.stat.exists
+        - data_disk_check.stdout == "exists"
 
     - name: Get UUID of the newly formatted disk
       ansible.builtin.command: "blkid -s UUID -o value {{ pgsql_data_disk }}"
@@ -58,7 +64,7 @@
       changed_when: false
       when:
         - pgsql_data_disk is defined
-        - data_disk.stat.exists
+        - data_disk_check.stdout == "exists"
 
     - name: Create PostgreSQL mount point
       ansible.builtin.file:
@@ -76,7 +82,7 @@
         state: mounted
       when:
         - pgsql_data_disk is defined
-        - data_disk.stat.exists
+        - data_disk_check.stdout == "exists"
         - disk_uuid_result is defined
 
     # --- Installation ---
@@ -116,6 +122,13 @@
         state: directory
         mode: '0755'
 
+    - name: Set PGDATA i systemd override
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/postgresql-16.service.d/override.conf
+        content: |
+          [Service]
+          Environment=PGDATA={{ pgsql_mount_point }}/data
+      notify: restart postgresql
 
     - name: Reload systemd daemon
       ansible.builtin.systemd:
@@ -133,14 +146,6 @@
       environment:
         PGSETUP_INITDB_OPTIONS: "--data-checksums"
         PGDATA: "{{ pgsql_mount_point }}/data"
-
-    - name: Set PGDATA i systemd override
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/postgresql-16.service.d/override.conf
-        content: |
-          [Service]
-          Environment=PGDATA={{ pgsql_mount_point }}/data
-      notify: restart postgresql
 
     - name: Start and enable PostgreSQL
       ansible.builtin.systemd:
