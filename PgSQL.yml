@@ -487,6 +487,7 @@
       loop:
         - "{{ postgresql_port }}/tcp"
         - "6432/tcp"
+      ignore_errors: yes
 
     # - name: Install Level.io agent
     #   shell: |
