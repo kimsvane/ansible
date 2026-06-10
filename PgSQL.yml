@@ -20,15 +20,24 @@
 
 
 
-    - name: Remove any existing subscription-manager release overrides
-      ansible.builtin.command: subscription-manager release --set=9.8
-      changed_when: true
+    - name: Remove any subscription-manager release lock
+      ansible.builtin.command: subscription-manager release --unset
+      changed_when: false
 
-    - name: Update all system packages to the latest minor release 
-      ansible.builtin.dnf:
-        name: "*"
-        state: latest
-        update_cache: yes
+    - name: Refresh subscription-manager metadata
+      ansible.builtin.command: subscription-manager refresh
+      changed_when: false
+
+    - name: Clean all dnf metadata
+      ansible.builtin.command: dnf clean all
+      changed_when: false
+
+    - name: Rebuild repo cache
+      ansible.builtin.command: dnf makecache
+      changed_when: false
+
+    - name: Security updates only (EUS safe)
+      ansible.builtin.command: dnf -y upgrade-minimal --security
 
     - name: Reboot after updates
       ansible.builtin.reboot:
@@ -37,9 +46,19 @@
         post_reboot_delay: 60
         test_command: whoami
 
-    - name: Find target data disk by size
+    - name: Find target data disk by size (unmounted, no partitions)
       ansible.builtin.shell: |
-        lsblk -bnd -o NAME,SIZE | awk '$2 == {{ pgsql_data_disk_size_gb * 1024 * 1024 * 1024 }} {print "/dev/" $1}'
+        TARGET_BYTES=$(( {{ pgsql_data_disk_size_gb }} * 1024 * 1024 * 1024 ))
+        for dev in $(lsblk -bnd -o NAME,SIZE,TYPE | awk -v size="$TARGET_BYTES" '$2 == size && $3 == "disk" {print $1}'); do
+          if lsblk -n "/dev/$dev" | grep -qE "part|lvm"; then
+            continue
+          fi
+          if grep -q "^/dev/$dev" /proc/mounts; then
+            continue
+          fi
+          echo "/dev/$dev"
+          break
+        done
       register: detected_disk
       when: pgsql_data_disk == ""
 
@@ -173,7 +192,7 @@
         state: started
         enabled: yes
         daemon_reload: yes
-      no_log: true
+
 
     # --- PostgreSQL konfiguration ---
     - name: Configure PostgreSQL - listen_addresses
@@ -197,18 +216,18 @@
         line: "max_connections = {{ (pgbouncer_max_user_connections * 1.10) | int }}"
       notify: restart postgresql
 
-    - name: Configure PostgreSQL - shared_buffers
+    - name: Configure PostgreSQL - shared_buffers (25% of RAM)
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?shared_buffers"
-        line: "shared_buffers = 4GB"
+        line: "shared_buffers = {{ (ansible_memtotal_mb * 0.25) | int }}MB"
       notify: restart postgresql
 
-    - name: Configure PostgreSQL - effective_cache_size
+    - name: Configure PostgreSQL - effective_cache_size (75% of RAM)
       ansible.builtin.lineinfile:
         path: "{{ pgsql_mount_point }}/data/postgresql.conf"
         regexp: "^#?effective_cache_size"
-        line: "effective_cache_size = 12GB"
+        line: "effective_cache_size = {{ (ansible_memtotal_mb * 0.75) | int }}MB"
       notify: restart postgresql
 
     - name: Configure PostgreSQL - maintenance_work_mem
@@ -260,20 +279,17 @@
         group: postgres
         mode: '0600'
         content: |
-          # TYPE  DATABASE        USER            ADDRESS                 METHOD
-
-          host    all    {{ veeam_db_user }}    0.0.0.0/0    scram-sha-256
-          host    all    {{ veeam_db_user }}    ::/0         scram-sha-256
-          host    all    all                    0.0.0.0/0    md5
-          local   all    postgres               trust
+          # TYPE  DATABASE  USER                 ADDRESS          METHOD
+          local   all       postgres                              trust
+          local   all       all                                   scram-sha-256
+          host    all       {{ veeam_db_user }}  0.0.0.0/0        scram-sha-256
+          host    all       {{ veeam_db_user }}  ::/0             scram-sha-256
+          host    all       all                  127.0.0.1/32     scram-sha-256
+          host    all       all                  ::1/128          scram-sha-256
+          host    all       all                  0.0.0.0/0        md5
           {% for extra_user in pgbouncer_extra_users | default([]) %}
-          host    all    {{ extra_user }}        0.0.0.0/0    md5
+          host    all       {{ extra_user }}      0.0.0.0/0        md5
           {% endfor %}
-
-          ###### PGBouncer additional config
-          local    all    all              scram-sha-256
-          host     all    all    127.0.0.1/32    scram-sha-256
-          host     all    all    ::1/128         scram-sha-256
       notify: restart postgresql
 
     - name: Wait for PostgreSQL to be ready
@@ -372,9 +388,9 @@
       become: yes
       become_user: postgres
 
-    - name: Grant superuser privileges to Veeam user
-      ansible.builtin.shell: |
-        sudo -u postgres psql -c "ALTER USER {{ veeam_db_user }} WITH SUPERUSER CREATEROLE CREATEDB;"
+    # - name: Grant superuser privileges to Veeam user
+    #   ansible.builtin.shell: |
+    #     sudo -u postgres psql -c "ALTER USER {{ veeam_db_user }} WITH SUPERUSER CREATEROLE CREATEDB;"
 
     # - name: Create VeeamBackup365 database
     #   ansible.builtin.shell: |
@@ -401,14 +417,14 @@
         owner: pgbouncer
         group: pgbouncer
         mode: '0750'
-    - name: Ensure userlist.txt eksisterer
-      ansible.builtin.file:
-        path: /etc/pgbouncer/userlist.txt
-        state: touch
-        owner: pgbouncer
-        group: pgbouncer
-        mode: '0600'
-      changed_when: false
+    # - name: Ensure userlist.txt eksisterer
+    #   ansible.builtin.file:
+    #     path: /etc/pgbouncer/userlist.txt
+    #     state: touch
+    #     owner: pgbouncer
+    #     group: pgbouncer
+    #     mode: '0600'
+    #   changed_when: false
 
     - name: Create PgBouncer userlist.txt
       ansible.builtin.copy:
@@ -421,12 +437,13 @@
           "{{ veeam_db_user }}" "{{ veeam_db_password }}"
       no_log: true
       notify: restart pgbouncer
-    - name: Fix pgbouncer.ini ownership så Ansible kan overskrive
-      ansible.builtin.file:
-        path: /etc/pgbouncer/pgbouncer.ini
-        owner: pgbouncer
-        group: pgbouncer
-        mode: '0640'
+
+    # - name: Fix pgbouncer.ini ownership så Ansible kan overskrive
+    #   ansible.builtin.file:
+    #     path: /etc/pgbouncer/pgbouncer.ini
+    #     owner: pgbouncer
+    #     group: pgbouncer
+    #     mode: '0640'
 
     - name: Configure PgBouncer ini file
       ansible.builtin.copy:
@@ -545,7 +562,7 @@
       ansible.builtin.debug:
         msg:
           - "======================================================================="
-          - "PostgreSQL 15 + PgBouncer Installation Complete (RHEL Native)"
+          - "PostgreSQL + PgBouncer Installation Complete (RHEL Native)"
           - "======================================================================="
           - "PostgreSQL Configuration:"
           - "  - Port: {{ postgresql_port }}"
