@@ -24,13 +24,12 @@
       ansible.builtin.command: subscription-manager release --unset
       changed_when: false
 
-    - name: Disable EUS repos, enable standard rolling repos
-      ansible.builtin.command: >
-        subscription-manager repos
-        --disable=rhel-9-for-x86_64-baseos-eus-rpms
-        --disable=rhel-9-for-x86_64-appstream-eus-rpms
-        --enable=rhel-9-for-x86_64-baseos-rpms
-        --enable=rhel-9-for-x86_64-appstream-rpms
+    - name: Disable ALL EUS repos og enable standard rolling repos
+      ansible.builtin.shell: |
+        subscription-manager repos --disable="*eus*"
+        subscription-manager repos \
+          --enable=rhel-9-for-x86_64-baseos-rpms \
+          --enable=rhel-9-for-x86_64-appstream-rpms
       changed_when: false
 
     - name: Refresh subscription-manager metadata
