@@ -18,8 +18,6 @@
 
   tasks:
 
-
-
     - name: Remove any subscription-manager release lock
       ansible.builtin.command: subscription-manager release --unset
       changed_when: false
