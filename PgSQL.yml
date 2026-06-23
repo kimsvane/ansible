@@ -58,7 +58,7 @@
 
     - name: Verify initramfs exists for new kernel
       ansible.builtin.stat:
-        path: "/boot/initramfs-{{ new_kernel.stdout }}.x86_64.img"
+        path: "/boot/initramfs-{{ new_kernel.stdout }}.img"   # ← no .x86_64 here
       register: initramfs_check
 
     - name: Fail if initramfs is missing before reboot
