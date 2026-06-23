@@ -44,8 +44,29 @@
       ansible.builtin.command: dnf makecache
       changed_when: false
 
+    - name: Clean old kernels (keep 2)
+      ansible.builtin.command: dnf -y remove --oldinstallonly --setopt installonly_limit=2 kernel
+      changed_when: false
+      ignore_errors: yes
+
     - name: Security updates only (EUS safe)
       ansible.builtin.command: dnf -y upgrade-minimal --security
+
+    - name: Get newly installed kernel version
+      ansible.builtin.shell: |
+        rpm -q --last kernel | head -1 | awk '{print $1}' | sed 's/kernel-//'
+      register: new_kernel
+      changed_when: false
+
+    - name: Verify initramfs exists for new kernel
+      ansible.builtin.stat:
+        path: "/boot/initramfs-{{ new_kernel.stdout }}.x86_64.img"
+      register: initramfs_check
+
+    - name: Fail if initramfs is missing before reboot
+      ansible.builtin.fail:
+        msg: "initramfs missing for kernel {{ new_kernel.stdout }} — aborting reboot to prevent boot failure"
+      when: not initramfs_check.stat.exists
 
     - name: Reboot after updates
       ansible.builtin.reboot:
