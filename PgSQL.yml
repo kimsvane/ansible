@@ -50,21 +50,52 @@
     - name: Security updates only (EUS safe)
       ansible.builtin.command: dnf -y upgrade-minimal --security
 
-    - name: Get newly installed kernel version
-      ansible.builtin.shell: |
-        rpm -q --last kernel | head -1 | awk '{print $1}' | sed 's/kernel-//'
-      register: new_kernel
+
+    - name: Get currently running kernel
+      ansible.builtin.shell: uname -r
+      register: running_kernel
       changed_when: false
+
+    - name: Get latest installed kernel version
+      ansible.builtin.shell: |
+        for pkg in kernel kernel-core; do
+          result=$(rpm -q --last "$pkg" 2>/dev/null | grep -v "not installed" | head -1 | awk '{print $1}')
+          if [ -n "$result" ]; then
+            echo "$result" | sed "s/${pkg}-//"
+            exit 0
+          fi
+        done
+        # Hard fallback: read /boot directly
+        ls -t /boot/vmlinuz-* 2>/dev/null | head -1 | sed 's|/boot/vmlinuz-||'
+      register: latest_kernel
+      changed_when: false
+
+    - name: Determine if a new kernel was installed
+      ansible.builtin.set_fact:
+        new_kernel_installed: "{{ latest_kernel.stdout | trim != running_kernel.stdout | trim }}"
 
     - name: Verify initramfs exists for new kernel
       ansible.builtin.stat:
-        path: "/boot/initramfs-{{ new_kernel.stdout }}.img"   # ← no .x86_64 here
+        path: "/boot/initramfs-{{ latest_kernel.stdout | trim }}.img"
       register: initramfs_check
+      when: new_kernel_installed | bool
 
     - name: Fail if initramfs is missing before reboot
       ansible.builtin.fail:
-        msg: "initramfs missing for kernel {{ new_kernel.stdout }} — aborting reboot to prevent boot failure"
-      when: not initramfs_check.stat.exists
+        msg: >
+          initramfs missing for kernel {{ latest_kernel.stdout | trim }}
+          (running: {{ running_kernel.stdout }}) — aborting reboot
+      when:
+        - new_kernel_installed | bool
+        - not initramfs_check.stat.exists
+
+    - name: Reboot after updates
+      ansible.builtin.reboot:
+        reboot_timeout: 1800
+        connect_timeout: 30
+        post_reboot_delay: 60
+        test_command: whoami
+
 
     - name: Reboot after updates
       ansible.builtin.reboot:
