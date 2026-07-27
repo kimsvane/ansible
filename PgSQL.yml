@@ -104,10 +104,14 @@
         post_reboot_delay: 60
         test_command: whoami
 
-    - name: Find target data disk by size (unmounted, no partitions)
+    - name: Find target data disk by whole-GB size (unmounted, no partitions)
       ansible.builtin.shell: |
-        TARGET_BYTES=$(( {{ pgsql_data_disk_size_gb }} * 1024 * 1024 * 1024 ))
-        for dev in $(lsblk -bnd -o NAME,SIZE,TYPE | awk -v size="$TARGET_BYTES" '$2 == size && $3 == "disk" {print $1}'); do
+        for dev in $(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1}'); do
+          size_bytes=$(blockdev --getsize64 "/dev/$dev")
+          size_gb=$(( size_bytes / 1073741824 ))
+          if [ "$size_gb" != "{{ pgsql_data_disk_size_gb }}" ]; then
+            continue
+          fi
           if lsblk -n "/dev/$dev" | grep -qE "part|lvm"; then
             continue
           fi
@@ -127,7 +131,7 @@
 
     - name: Fail if no disk detected
       ansible.builtin.fail:
-        msg: "Could not find a disk of {{ pgsql_data_disk_size_gb }}GB. lsblk output: {{ detected_disk.stdout }}"
+        msg: "Could not find an unpartitioned, unmounted disk of {{ pgsql_data_disk_size_gb }}GB. Detected devices: {{ detected_disk.stdout }}"
       when:
         - pgsql_data_disk == ""
         - detected_disk is not skipped

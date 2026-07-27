@@ -728,10 +728,10 @@
       ansible.windows.win_get_url:
         url: "{{ item.url }}"
         dest: "D:\\Utility\\{{ item.file }}"
-        # Vi sætter force: true midlertidigt for at overskrive de potentielt ødelagte filer
+
         force: true 
       loop:
-        # Bemærk: Jeg har opdateret WinSCP linket til deres officielle statiske download
+
         - { url: "https://master.dl.sourceforge.net/project/winscp/WinSCP/6.3.2/WinSCP-6.3.2-Portable.zip", file: "WinSCP.zip" }
         - { url: "https://download.sysinternals.com/files/ProcessExplorer.zip", file: "ProcessExplorer.zip" }
         - { url: "https://files.budman.pw/?file=iperf3.1.4_64.zip", file: "iperf3.zip" }
