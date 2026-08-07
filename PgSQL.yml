@@ -103,89 +103,204 @@
         connect_timeout: 30
         post_reboot_delay: 60
         test_command: whoami
-
-    - name: Find target data disk by whole-GB size (unmounted, no partitions)
+    - name: Trigger storage rescan for newly attached volumes
       ansible.builtin.shell: |
-        for dev in $(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1}'); do
-          size_bytes=$(blockdev --getsize64 "/dev/$dev")
-          size_gb=$(( size_bytes / 1073741824 ))
-          if [ "$size_gb" != "{{ pgsql_data_disk_size_gb }}" ]; then
-            continue
-          fi
-          if lsblk -n "/dev/$dev" | grep -qE "part|lvm"; then
-            continue
-          fi
-          if grep -q "^/dev/$dev" /proc/mounts; then
-            continue
-          fi
-          echo "/dev/$dev"
-          break
+        for host in /sys/class/scsi_host/host*/scan; do
+          echo "- - -" > "$host" 2>/dev/null || true
         done
-      register: detected_disk
-      when: pgsql_data_disk == ""
+        udevadm trigger --subsystem-match=block
+        udevadm settle
+      changed_when: false
 
-    - name: Set pgsql_data_disk from detected disk
-      ansible.builtin.set_fact:
-        pgsql_data_disk: "{{ detected_disk.stdout | trim }}"
-      when: pgsql_data_disk == ""
+    - name: List available by-id links for debugging
+      ansible.builtin.command: ls -la /dev/disk/by-id/
+      register: byid_listing
+      changed_when: false
+      failed_when: false
 
-    - name: Fail if no disk detected
-      ansible.builtin.fail:
-        msg: "Could not find an unpartitioned, unmounted disk of {{ pgsql_data_disk_size_gb }}GB. Detected devices: {{ detected_disk.stdout }}"
-      when:
-        - pgsql_data_disk == ""
-        - detected_disk is not skipped
-        - detected_disk.stdout | trim == ""
-
-    # - name: Check if data disk exists
-    #   ansible.builtin.stat:
-    #     path: "{{ pgsql_data_disk }}"
-    #   register: data_disk
-    #   when: pgsql_data_disk is defined
-
-    # - name: Check if data disk exists
-    #   ansible.builtin.shell: test -b "{{ pgsql_data_disk }}" && echo "exists" || echo "missing"
-    #   register: data_disk_check
-    #   changed_when: false
-    #   when: 
-    #     - pgsql_data_disk is defined
-    #     - pgsql_data_disk != ""
-
-    - name: Create filesystem on data disk
-      ansible.builtin.filesystem:
-        fstype: xfs
-        dev: "{{ pgsql_data_disk }}"
-        opts: -n ftype=1
-      when: 
-        - pgsql_data_disk is defined
-        - pgsql_data_disk != ""
-
-    - name: Get UUID of the disk
-      ansible.builtin.command: "blkid -s UUID -o value {{ pgsql_data_disk }}"
-      register: disk_uuid_result
+    - name: Find data disk by IBM volume ID (by-id, preferred)
+      ansible.builtin.shell: |
+        readlink -f /dev/disk/by-id/virtio-{{ pgsql_volume_id_short }} 2>/dev/null || true
+      register: detected_disk_byid
       changed_when: false
       when:
-        - pgsql_data_disk is defined
-        - pgsql_data_disk != ""
+        - pgsql_data_disk == ""
+        - pgsql_volume_id_short is defined
+        - pgsql_volume_id_short != ""
 
-    - name: Create PostgreSQL mount point
+    - name: Wait for expected data disk to appear (size fallback)
+      ansible.builtin.shell: |
+        for i in $(seq 1 30); do
+          for dev in $(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1}'); do
+            size_bytes=$(blockdev --getsize64 "/dev/$dev" 2>/dev/null) || continue
+            size_gb=$(( size_bytes / 1073741824 ))
+            if [ "$size_gb" = "{{ pgsql_data_disk_size_gb }}" ]; then
+              if lsblk -n "/dev/$dev" | grep -qE "part|lvm"; then continue; fi
+              echo "/dev/$dev"
+              exit 0
+            fi
+          done
+          sleep 5
+        done
+        exit 1
+      register: detected_disk_bysize
+      changed_when: false
+      when:
+        - pgsql_data_disk == ""
+        - detected_disk_byid is skipped or (detected_disk_byid.stdout | default('') == "")
+
+    - name: Set pgsql_data_disk from detection result
+      ansible.builtin.set_fact:
+        pgsql_data_disk: >-
+          {{ (detected_disk_byid.stdout | default('') | trim)
+             if (detected_disk_byid is defined and detected_disk_byid.stdout is defined and detected_disk_byid.stdout | trim != "")
+             else (detected_disk_bysize.stdout | default('') | trim) }}
+      when: pgsql_data_disk == ""
+
+    - name: Fail hard if no data disk was found
+      ansible.builtin.fail:
+        msg: >
+          No {{ pgsql_data_disk_size_gb }}GB data disk found for PostgreSQL.
+          by-id lookup: {{ detected_disk_byid.stdout | default('n/a') }}.
+          Available by-id devices: {{ byid_listing.stdout | default('n/a') }}
+      when: pgsql_data_disk == "" or pgsql_data_disk is none
+
+    - name: Check if data disk already has a partition table
+      ansible.builtin.command: "blkid -o value -s PTTYPE {{ pgsql_data_disk }}"
+      register: disk_pttype
+      changed_when: false
+      failed_when: false
+
+    - name: Create GPT partition table and single partition spanning the disk
+      ansible.builtin.shell: |
+        parted -s {{ pgsql_data_disk }} mklabel gpt
+        parted -s {{ pgsql_data_disk }} mkpart primary xfs 0% 100%
+        partprobe {{ pgsql_data_disk }}
+        udevadm settle
+      when: disk_pttype.stdout | default('') == ""
+
+    - name: Wait for partition device to appear
+      ansible.builtin.wait_for:
+        path: "{{ pgsql_data_disk }}1"
+        timeout: 30
+
+    - name: Create filesystem on partition
+      ansible.builtin.filesystem:
+        fstype: xfs
+        dev: "{{ pgsql_data_disk }}1"
+        opts: -n ftype=1 -L pgsqldata
+
+    - name: Get UUID of the partition
+      ansible.builtin.command: "blkid -s UUID -o value {{ pgsql_data_disk }}1"
+      register: disk_uuid_result
+      changed_when: false
+
+    - name: Fail if UUID could not be read
+      ansible.builtin.fail:
+        msg: "blkid returned no UUID for {{ pgsql_data_disk }}1 — filesystem creation likely failed silently."
+      when: disk_uuid_result.stdout | trim == ""
+
+    - name: Create PostgreSQL mount point (data subdirectory)
       ansible.builtin.file:
-        path: "{{ pgsql_mount_point }}"
+        path: "{{ pgsql_mount_point }}/data"
         state: directory
-        mode: '0755'
+        owner: postgres
+        group: postgres
+        mode: '0700'
 
-    - name: Mount data disk using UUID
+    - name: Mount data partition using UUID and persist in fstab
       ansible.posix.mount:
-        path: "{{ pgsql_mount_point }}"
+        path: "{{ pgsql_mount_point }}/data"
         src: "UUID={{ disk_uuid_result.stdout | trim }}"
         fstype: xfs
         opts: defaults,noatime
         state: mounted
-      when:
-        - pgsql_data_disk is defined
-        - pgsql_data_disk != ""
-        - disk_uuid_result is defined
-        - disk_uuid_result.skipped is not defined
+
+    - name: Verify partition is actually mounted at expected path
+      ansible.builtin.command: findmnt {{ pgsql_mount_point }}/data
+      changed_when: false
+    # - name: Find target data disk by whole-GB size (unmounted, no partitions)
+    #   ansible.builtin.shell: |
+    #     for dev in $(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1}'); do
+    #       size_bytes=$(blockdev --getsize64 "/dev/$dev")
+    #       size_gb=$(( size_bytes / 1073741824 ))
+    #       if [ "$size_gb" != "{{ pgsql_data_disk_size_gb }}" ]; then
+    #         continue
+    #       fi
+    #       if lsblk -n "/dev/$dev" | grep -qE "part|lvm"; then
+    #         continue
+    #       fi
+    #       if grep -q "^/dev/$dev" /proc/mounts; then
+    #         continue
+    #       fi
+    #       echo "/dev/$dev"
+    #       break
+    #     done
+    #   register: detected_disk
+    #   when: pgsql_data_disk == ""
+
+    # - name: Set pgsql_data_disk from detected disk
+    #   ansible.builtin.set_fact:
+    #     pgsql_data_disk: "{{ detected_disk.stdout | trim }}"
+    #   when: pgsql_data_disk == ""
+
+    # - name: Fail if no disk detected
+    #   ansible.builtin.fail:
+    #     msg: "Could not find an unpartitioned, unmounted disk of {{ pgsql_data_disk_size_gb }}GB. Detected devices: {{ detected_disk.stdout }}"
+    #   when:
+    #     - pgsql_data_disk == ""
+    #     - detected_disk is not skipped
+    #     - detected_disk.stdout | trim == ""
+
+    # # - name: Check if data disk exists
+    # #   ansible.builtin.stat:
+    # #     path: "{{ pgsql_data_disk }}"
+    # #   register: data_disk
+    # #   when: pgsql_data_disk is defined
+
+    # # - name: Check if data disk exists
+    # #   ansible.builtin.shell: test -b "{{ pgsql_data_disk }}" && echo "exists" || echo "missing"
+    # #   register: data_disk_check
+    # #   changed_when: false
+    # #   when: 
+    # #     - pgsql_data_disk is defined
+    # #     - pgsql_data_disk != ""
+
+    # - name: Create filesystem on data disk
+    #   ansible.builtin.filesystem:
+    #     fstype: xfs
+    #     dev: "{{ pgsql_data_disk }}"
+    #     opts: -n ftype=1
+    #   when: 
+    #     - pgsql_data_disk is defined
+    #     - pgsql_data_disk != ""
+
+    # - name: Get UUID of the disk
+    #   ansible.builtin.command: "blkid -s UUID -o value {{ pgsql_data_disk }}"
+    #   register: disk_uuid_result
+    #   changed_when: false
+    #   when:
+    #     - pgsql_data_disk is defined
+    #     - pgsql_data_disk != ""
+
+    # - name: Create PostgreSQL mount point
+    #   ansible.builtin.file:
+    #     path: "{{ pgsql_mount_point }}"
+    #     state: directory
+    #     mode: '0755'
+
+    # - name: Mount data disk using UUID
+    #   ansible.posix.mount:
+    #     path: "{{ pgsql_mount_point }}"
+    #     src: "UUID={{ disk_uuid_result.stdout | trim }}"
+    #     fstype: xfs
+    #     opts: defaults,noatime
+    #     state: mounted
+    #   when:
+    #     - pgsql_data_disk is defined
+    #     - pgsql_data_disk != ""
+    #     - disk_uuid_result is defined
+    #     - disk_uuid_result.skipped is not defined
 
     # --- Installation ---
     - name: Install PostgreSQL 16 repository
@@ -209,13 +324,13 @@
         state: present
         disable_gpg_check: yes
 
-    - name: Set correct ownership on mount point
-      ansible.builtin.file:
-        path: "{{ pgsql_mount_point }}"
-        state: directory
-        owner: postgres
-        group: postgres
-        mode: '0700'
+    # - name: Set correct ownership on mount point
+    #   ansible.builtin.file:
+    #     path: "{{ pgsql_mount_point }}"
+    #     state: directory
+    #     owner: postgres
+    #     group: postgres
+    #     mode: '0700'
 
     - name: Create systemd override directory for PostgreSQL
       ansible.builtin.file:
