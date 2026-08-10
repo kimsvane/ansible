@@ -16,6 +16,9 @@
         name: pgbouncer
         state: restarted
 
+  vars:
+    pgsql_data_disk: ""
+
   tasks:
 
     - name: Remove any subscription-manager release lock
