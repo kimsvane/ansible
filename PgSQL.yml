@@ -367,12 +367,22 @@
         path: "{{ pgsql_mount_point }}/data/PG_VERSION"
       register: pgdata
 
-    - name: Initialize PostgreSQL with data checksums
-      ansible.builtin.command: /usr/pgsql-16/bin/postgresql-16-setup initdb
+    # - name: Initialize PostgreSQL with data checksums
+    #   ansible.builtin.command: /usr/pgsql-16/bin/postgresql-16-setup initdb
+    #   when: not pgdata.stat.exists
+    #   environment:
+    #     PGSETUP_INITDB_OPTIONS: "--data-checksums"
+    #     PGDATA: "{{ pgsql_mount_point }}/data"
+
+    - name: Initialize PostgreSQL with data checksums (direct initdb, bypass wrapper)
+      ansible.builtin.command: >
+        /usr/pgsql-16/bin/initdb
+        -D {{ pgsql_mount_point }}/data
+        --data-checksums
+        -U postgres
+      become: yes
+      become_user: postgres
       when: not pgdata.stat.exists
-      environment:
-        PGSETUP_INITDB_OPTIONS: "--data-checksums"
-        PGDATA: "{{ pgsql_mount_point }}/data"
 
     - name: Start and enable PostgreSQL
       ansible.builtin.systemd:
