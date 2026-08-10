@@ -202,6 +202,14 @@
       ansible.builtin.fail:
         msg: "blkid returned no UUID for {{ pgsql_data_disk }}1 — filesystem creation likely failed silently."
       when: disk_uuid_result.stdout | trim == ""
+    
+    - name: Ensure postgres system user exists (idempotent, pre-package)
+      ansible.builtin.user:
+        name: postgres
+        system: yes
+        shell: /sbin/nologin
+        home: /var/lib/pgsql
+        create_home: no
 
     - name: Create PostgreSQL mount point (data subdirectory)
       ansible.builtin.file:
