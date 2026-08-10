@@ -312,7 +312,14 @@
     #     - pgsql_data_disk != ""
     #     - disk_uuid_result is defined
     #     - disk_uuid_result.skipped is not defined
-
+    - name: Fix ownership on mounted data directory (must run AFTER mount)
+      ansible.builtin.file:
+        path: "{{ pgsql_mount_point }}/data"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+        recurse: yes
     # --- Installation ---
     - name: Install PostgreSQL 16 repository
       ansible.builtin.dnf:
