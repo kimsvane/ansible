@@ -15,6 +15,7 @@
       ansible.builtin.systemd:
         name: pgbouncer
         state: restarted
+        daemon_reload: yes
 
   vars:
     pgsql_data_disk: ""
@@ -630,6 +631,23 @@
     #     group: pgbouncer
     #     mode: '0600'
     #   changed_when: false
+    - name: Create systemd override directory for PgBouncer
+      ansible.builtin.file:
+        path: /etc/systemd/system/pgbouncer.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Set LimitNOFILE i systemd override for PgBouncer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/pgbouncer.service.d/override.conf
+        content: |
+          [Service]
+          LimitNOFILE=65536
+      notify: restart pgbouncer
+
+    - name: Reload systemd daemon (pgbouncer override)
+      ansible.builtin.systemd:
+        daemon_reload: yes
 
     - name: Create PgBouncer userlist.txt
       ansible.builtin.copy:
