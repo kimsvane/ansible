@@ -340,8 +340,8 @@
 
     - name: Remove official PGDG rpm package to prevent 404 repo path bugs
       ansible.builtin.dnf:
-      name: pgdg-redhat-repo
-      state: absent
+        name: pgdg-redhat-repo
+        state: absent
 
     - name: Remove any remaining PGDG repo files
       ansible.builtin.file:
