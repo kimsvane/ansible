@@ -322,11 +322,42 @@
         mode: '0700'
         recurse: yes
     # --- Installation ---
-    - name: Install PostgreSQL 16 repository
-      ansible.builtin.dnf:
-        name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
-        state: present
-        disable_gpg_check: yes
+    # - name: Install PostgreSQL 16 repository
+    #   ansible.builtin.dnf:
+    #     name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+    #     state: present
+    #     disable_gpg_check: yes
+
+
+
+    - name: Remove official PGDG rpm repo files that cause 404 error
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/yum.repos.d/pgdg-redhat-all.repo
+        - /etc/yum.repos.d/pgdg-redhat-updates.repo
+
+    - name: Create clean and correct PostgreSQL 16 repository file manually
+      ansible.builtin.copy:
+        dest: /etc/yum.repos.d/pgdg-redhat-custom.repo
+        content: |
+          [pgdg16]
+          name=PostgreSQL 16 for RHEL 9 - $basearch
+          baseurl=https://download.postgresql.org/pub/repos/yum/16/redhat/rhel-9-$basearch
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://download.postgresql.org/pub/repos/yum/RPM-GPG-KEY-PGDG
+          
+          [pgdg-common]
+          name=PostgreSQL common RPMs for RHEL / Rocky Linux - $basearch
+          baseurl=https://download.postgresql.org/pub/repos/yum/common/redhat/rhel-9-$basearch
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://download.postgresql.org/pub/repos/yum/RPM-GPG-KEY-PGDG
+        owner: root
+        group: root
+        mode: '0644'
     
     - name: Fix PGDG repo files to use major version 9 instead of minor version 9.x
       ansible.builtin.replace:
