@@ -327,6 +327,17 @@
         name: https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
         state: present
         disable_gpg_check: yes
+    
+    - name: Fix PGDG repo files to use major version 9 instead of minor version 9.x
+      ansible.builtin.replace:
+        path: "{{ item }}"
+        regexp: 'rhel-\$releasever'
+        replace: 'rhel-9'
+      loop:
+        - /etc/yum.repos.d/pgdg-redhat-all.repo
+        - /etc/yum.repos.d/pgdg-redhat-updates.repo
+      ignore_errors: yes
+
 
     - name: Disable built-in PostgreSQL module
       ansible.builtin.command: dnf -y module disable postgresql
