@@ -338,6 +338,19 @@
         - /etc/yum.repos.d/pgdg-redhat-all.repo
         - /etc/yum.repos.d/pgdg-redhat-updates.repo
 
+    - name: Remove official PGDG rpm package to prevent 404 repo path bugs
+      ansible.builtin.dnf:
+      name: pgdg-redhat-repo
+      state: absent
+
+    - name: Remove any remaining PGDG repo files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/yum.repos.d/pgdg-redhat-all.repo
+        - /etc/yum.repos.d/pgdg-redhat-updates.repo
+
     - name: Create clean and correct PostgreSQL 16 repository file manually
       ansible.builtin.copy:
         dest: /etc/yum.repos.d/pgdg-redhat-custom.repo
@@ -358,16 +371,6 @@
         owner: root
         group: root
         mode: '0644'
-    
-    - name: Fix PGDG repo files to use major version 9 instead of minor version 9.x
-      ansible.builtin.replace:
-        path: "{{ item }}"
-        regexp: 'rhel-\$releasever'
-        replace: 'rhel-9'
-      loop:
-        - /etc/yum.repos.d/pgdg-redhat-all.repo
-        - /etc/yum.repos.d/pgdg-redhat-updates.repo
-      ignore_errors: yes
 
 
     - name: Disable built-in PostgreSQL module
