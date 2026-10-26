@@ -93,12 +93,12 @@
         - new_kernel_installed | bool
         - not initramfs_check.stat.exists
 
-    - name: Reboot after updates
-      ansible.builtin.reboot:
-        reboot_timeout: 1800
-        connect_timeout: 30
-        post_reboot_delay: 60
-        test_command: whoami
+    # - name: Reboot after updates
+    #   ansible.builtin.reboot:
+    #     reboot_timeout: 1800
+    #     connect_timeout: 30
+    #     post_reboot_delay: 60
+    #     test_command: whoami
 
 
     - name: Reboot after updates
@@ -329,8 +329,9 @@
         disable_gpg_check: yes
 
     - name: Disable built-in PostgreSQL module
-      ansible.builtin.shell: dnf -y module disable postgresql
+      ansible.builtin.command: dnf -y module disable postgresql
       register: module_disable
+      failed_when: module_disable.rc != 0 and 'is disabled' not in module_disable.stderr and 'No such module' not in module_disable.stderr
       changed_when: "'Complete!' in module_disable.stdout"
 
     - name: Install PostgreSQL 16 and dependencies
