@@ -734,7 +734,7 @@
 
         - { url: "https://master.dl.sourceforge.net/project/winscp/WinSCP/6.3.2/WinSCP-6.3.2-Portable.zip", file: "WinSCP.zip" }
         - { url: "https://download.sysinternals.com/files/ProcessExplorer.zip", file: "ProcessExplorer.zip" }
-        - { url: "https://files.budman.pw/?file=iperf3.1.4_64.zip", file: "iperf3.zip" }
+        - { url: "https://files.budman.xyz/?file=iperf3.22_64.zip", file: "iperf3.zip" }
 
     - name: extract tools
       community.windows.win_unzip:
